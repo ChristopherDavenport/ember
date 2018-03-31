@@ -1,7 +1,12 @@
-lazy val core = project.in(file("."))
+lazy val ember = project.in(file("."))
+  .aggregate(core)
+  .settings(noPublish)
+
+lazy val core = project.in(file("modules/core"))
     .settings(commonSettings)
+    .settings(releaseSettings)
     .settings(
-      name := "ember"
+      name := projectName("core")
     )
 
 val catsV = "1.1.0"
@@ -141,3 +146,15 @@ lazy val releaseSettings = {
     }
   )
 }
+
+lazy val noPublish = {
+  import com.typesafe.sbt.pgp.PgpKeys.publishSigned
+  Seq(
+    publish := {},
+    publishLocal := {},
+    publishSigned := {},
+    publishArtifact := false
+  )
+}
+
+def projectName(name: String): String = s"ember-$name" 
