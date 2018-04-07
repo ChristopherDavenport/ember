@@ -28,8 +28,8 @@ object Server extends StreamApp[IO] {
       timeoutSignal <- Stream.eval(async.signalOf[IO, Boolean](true))
       _ <- tcp.server[IO](new InetSocketAddress(address, port))
         .map(_.flatMap(socket => 
-          readWithTimeout(socket, 1.second, timeoutSignal.get, 256 * 1024)
-            // socket.reads(256 * 1024, 1.second.some)
+          // readWithTimeout(socket, 1.second, timeoutSignal.get, 256 * 1024)
+            socket.reads(256 * 1024, 1.second.some)
             .through(text.utf8Decode)
             .through(text.lines)
             .evalMap(text => IO(println(s"Request: $text")))
@@ -39,7 +39,7 @@ object Server extends StreamApp[IO] {
               Stream.eval(IO(println("Finished Reading -")))
             ++
             Stream.eval(counter.modify(i => i+1).map(_.now))
-            .map(i => s"http/1.1 200\r\nContent-Length: 35\r\nContent-Type: text\\html\r\n\r\n<html><h1> Hello #$i! </h1></html>")
+            .map(i => s"http/1.1 200\r\nContent-Length: 35\r\nContent-Type: text\\html\r\n\r\n<html><h1> Hello #$i! </h1></html>\r\n")
               .through(text.lines)
               .evalMap(text => IO(println(s"Response: $text")).as(text))
               .intersperse("\r\n")
