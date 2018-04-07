@@ -28,27 +28,17 @@ object Server extends StreamApp[IO] {
       timeoutSignal <- Stream.eval(async.signalOf[IO, Boolean](true))
       _ <- tcp.server[IO](new InetSocketAddress(address, port))
         .map(_.flatMap(socket => 
-          // readWithTimeout(socket, 1.second, timeoutSignal.get, 256 * 1024)
             socket.reads(256 * 1024, 1.second.some)
-            .through(text.utf8Decode)
-            .through(text.lines)
-            .evalMap(text => IO(println(s"Request: $text")))
-            .take(11)
-            .drain
-            ++
-              Stream.eval(IO(println("Finished Reading -")))
-            ++
-            Stream.eval(counter.modify(i => i+1).map(_.now))
-            .map(i => s"http/1.1 200\r\nContent-Length: 35\r\nContent-Type: text\\html\r\n\r\n<html><h1> Hello #$i! </h1></html>\r\n")
-              .through(text.lines)
-              .evalMap(text => IO(println(s"Response: $text")).as(text))
-              .intersperse("\r\n")
-              .through(text.utf8Encode)
+              .through(requestPipe)
+              .evalMap(text => IO(println(s"Request: $text")).as(text))
+              .take(1)
+              .through(reqToResp)
+              .take(1)
+              .through(respToBytes)
               .to(socket.writes())
               .onFinalize(socket.endOfOutput)
               .drain
-        
-        ).drain
+        )
         ).joinUnbounded.void
       _ <- Stream.eval(IO(println("Exiting App From Exit Code")))
       exitCode <- ExitCode.Success.pure[Stream[IO, ?]]
@@ -57,40 +47,50 @@ object Server extends StreamApp[IO] {
     
   }
 
-   /**
-    * All credit to fs2-http
-    * https://github.com/Spinoco/fs2-http/
-    * MIT Licensed
-    * Reads from supplied socket with timeout until `shallTimeout` yields to true.
-    * @param socket         A socket to read from
-    * @param timeout        A timeout
-    * @param shallTimeout   If true, timeout will be applied, if false timeout won't be applied.
-    * @param chunkSize      Size of chunk to read up to
-    */
-  def readWithTimeout[F[_]](
-    socket: Socket[F]
-    , timeout: FiniteDuration
-    , shallTimeout: F[Boolean]
-    , chunkSize: Int
-  )(implicit F: Sync[F]) : Stream[F, Byte] = {
-    def go(remains:FiniteDuration) : Stream[F, Byte] = {
-      Stream.eval(shallTimeout).flatMap { shallTimeout =>
-        if (!shallTimeout) socket.reads(chunkSize, None)
-        else {
-          if (remains <= 0.millis) Stream.raiseError(new Throwable("Timeout!"))
-          else {
-            Stream.eval(F.delay(System.currentTimeMillis())).flatMap { start =>
-            Stream.eval(socket.read(chunkSize, Some(remains))).flatMap { read =>
-            Stream.eval(F.delay(System.currentTimeMillis())).flatMap { end => read match {
-              case Some(bytes) => Stream.chunk(bytes) ++ go(remains - (end - start).millis)
-              case None => Stream.empty
-            }}}}
-          }
-        }
-      }
-    }
+  import org.http4s.Request
+  import org.http4s.Method
+  import org.http4s.Response
+  import org.http4s._
+  def requestPipe: Pipe[IO, Byte, Request[IO]] = stream => Stream(Request[IO](Method.GET))
 
-    go(timeout)
+
+  def reqToResp: Pipe[IO, Request[IO], Response[IO]] = _.evalMap{req => 
+    Response[IO](Status.Ok)
+      .withBody("<html><h1>Hello From Http4s</h1></html>")
+      .map(resp => resp.withContentType(headers.`Content-Type`(MediaType.`text/html`)))
+
+  }
+
+
+  def respToBytes: Pipe[IO, Response[IO], Byte] = _.flatMap{resp: Response[IO] =>
+    val statusInstances = new StatusInstances{}
+    import statusInstances._
+    implicit val appEC = ExecutionContext.global
+    // val httpV = resp.httpVersion
+    // val status = resp.status
+    val headerStrings : List[String] = resp.headers.map(h => h.name + ": " + h.value).toList
+
+    
+    val initSection = Stream(show"${resp.httpVersion} ${resp.status}") ++ Stream.emits(headerStrings)
+
+    
+    // Stream.eval(IO(println(resp))).drain ++
+    // Stream.eval(IO(println(initSection.toList))).drain ++ 
+    val respStream = initSection.covary[IO].intersperse("\r\n").through(text.utf8Encode) ++ 
+    Stream("\r\n\r\n").covary[IO].through(text.utf8Encode) ++
+    resp.body 
+
+    val bufferedResp = respStream.compile.toVector
+
+    respStream
+    .observe(s => s
+      .through(text.utf8Decode[IO])
+      .through(text.lines)
+      .evalMap{line => IO(println(show"Response- $line"))}
+    )
+
+
+
   }
 
 }
