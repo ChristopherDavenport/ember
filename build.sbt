@@ -41,6 +41,7 @@ lazy val commonSettings = Seq(
   addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.6" cross CrossVersion.binary),
 
   libraryDependencies ++= Seq(
+    "io.chrisdavenport"           %% "linebacker"                 % "0.0.4",
     "org.typelevel"               %% "cats-core"                  % catsV,
 
     "org.typelevel"               %% "kittens"                    % kittensV,
