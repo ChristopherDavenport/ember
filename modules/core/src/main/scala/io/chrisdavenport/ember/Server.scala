@@ -27,62 +27,6 @@ import _root_.io.circe._
 private[ember] object Server {
   private val logger = org.log4s.getLogger
 
-  // override def stream(args: List[String], requestShutdown: IO[Unit]) : Stream[IO, ExitCode] = {
-  //   val address = "0.0.0.0"
-  //   val port = 8080
-  //   implicit val appEC = ExecutionContext.global
-  //   implicit val acg = AsynchronousChannelGroup.withFixedThreadPool(100, Executors.defaultThreadFactory)
-
-  //   val maxConcurrency: Int = Int.MaxValue
-  //   val receiveBufferSize: Int = 256 * 1024
-  //   val maxHeaderSize: Int = 10 *1024
-  //   val requestHeaderReceiveTimeout: Duration = 5.seconds
-  //   val (initial, readDuration) = requestHeaderReceiveTimeout match {
-  //     case fin: FiniteDuration => (true, fin)
-  //     case _ => (false, 0.millis)
-  //   }
-  //   for {
-  //     _ : Unit<- tcp.server[IO](new InetSocketAddress(address, port)).map(_.flatMap(socket =>
-  //         Stream.eval(async.signalOf[IO, Boolean](initial)).flatMap{ timeoutSignal =>  
-  //           socket.reads(receiveBufferSize, readDuration.some)
-  //             .through(requestPipe)
-  //             .take(1)
-  //             .flatMap{ req => 
-  //               Stream.eval_(IO(logger.debug(s"Request Processed $req"))) ++
-  //               Stream.eval_(timeoutSignal.set(false)) ++
-  //               Stream(req).covary[IO].through(httpServiceToPipe[IO](service)).take(1)
-  //                 .handleErrorWith(e => Stream(Response[IO](Status.InternalServerError)).take(1))
-  //                 .flatTap(resp => Stream.eval(IO(logger.debug(s"Response Created $resp"))))
-  //                 .map(resp => (req, resp))
-  //             }
-  //             .attempt
-  //             .evalMap{ attempted => 
-  //               def send(request:Option[Request[IO]], resp: Response[IO]): IO[Unit] = {
-  //                 Stream(resp).covary[IO]
-  //                 .through(respToBytes)
-  //                 .through(socket.writes())
-  //                 .onFinalize(socket.endOfOutput)
-  //                 .compile
-  //                 .drain
-  //                 .attempt
-  //                 .flatMap{
-  //                   case Left(err) => Stream.empty.covary[IO].compile.drain
-  //                   case Right(()) => IO.unit
-  //                 }
-  //               }
-  //               attempted match {
-  //                 case Right((request, response)) => send(Some(request), response)
-  //                 case Left(err) => Stream(Response[IO](Status.InternalServerError)).evalMap { send(None, _) }.compile.drain
-  //               }
-  //             }.drain
-  //         }
-  //       )).join(maxConcurrency)
-  //     exitCode <- ExitCode.Success.pure[Stream[IO, ?]]
-  //   } yield exitCode
-    
-    
-  // }
-
   /**
    * The issue with a normal http body is that there is no termination character, 
    * thus unless you have content-length and the client still has their input side open, 
@@ -269,23 +213,6 @@ private[ember] object Server {
     }
     else {
       Option.empty[(ByteVector, ByteVector)]
-    }
-  }
-
-  def service[F[_]: Sync] : HttpService[F] = {
-    val dsl = new org.http4s.dsl.Http4sDsl[F]{}
-    import dsl._
-    
-    HttpService[F]{
-      case req @ POST -> Root  => 
-        for {
-          json <- req.decodeJson[Json]
-          resp <- Ok(json)
-        } yield resp
-      case GET -> Root => 
-        Ok(Json.obj("root" -> Json.fromString("GET")))
-      case GET -> Root / "sarah" => 
-        Ok("Hi Sarah!")
     }
   }
 
