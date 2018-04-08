@@ -43,7 +43,7 @@ object Example {
         service[IO],
         Response[IO](Status.NotFound),
         _ => Stream(Response[IO](Status.InternalServerError)),
-        _ => Stream.empty,
+        (_,_, _) => Stream.empty,
         appEC,
         acg,
         terminatedSignal,
@@ -53,7 +53,7 @@ object Example {
   }
 
   def service[F[_]: Sync] : HttpService[F] = {
-    val dsl = new org.http4s.dsl.Http4sDsl[F]{}
+    val dsl = new Http4sDsl[F]{}
     import dsl._
     
     HttpService[F]{

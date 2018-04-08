@@ -23,7 +23,7 @@ package object ember {
     service: HttpService[F],
     onMissing: Response[F],
     onError: Throwable => Stream[F, Response[F]],
-    onWriteFailure : Throwable => Stream[F, Nothing],
+    onWriteFailure : (Option[Request[F]], Response[F], Throwable) => Stream[F, Nothing],
     ec: ExecutionContext,
     ag: AsynchronousChannelGroup,
     terminationSignal: async.immutable.Signal[F, Boolean],
@@ -42,7 +42,7 @@ package object ember {
           Stream.eval(async.signalOf[F, Boolean](initial)).flatMap{ 
             timeoutSignal =>  
             Server.readWithTimeout[F](socket, readDuration, timeoutSignal.get, receiveBufferSize)
-              .through(Server.requestPipe)
+              .through(Server.requestPipe(maxHeaderSize))
               .take(1)
               .flatMap{ req => 
                 Stream.eval_(Sync[F].delay(logger.debug(s"Request Processed $req"))) ++
@@ -64,7 +64,7 @@ package object ember {
                   .drain
                   .attempt
                   .flatMap{
-                    case Left(err) => onWriteFailure(err).compile.drain
+                    case Left(err) => onWriteFailure(request, resp, err).compile.drain
                     case Right(()) => Sync[F].pure(())
                   }
                 }

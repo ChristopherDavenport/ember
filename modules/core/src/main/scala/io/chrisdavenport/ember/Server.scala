@@ -1,28 +1,17 @@
 package io.chrisdavenport.ember
 
-
-import cats._
 import cats.effect._
 import cats.implicits._
 import fs2._
-import fs2.StreamApp._
-import fs2.io._
 import fs2.io.tcp.Socket
 import fs2.interop.scodec.ByteVectorChunk
-import scodec.bits.{BitVector, ByteVector}
-import scodec.bits.Bases.{Alphabets, Base64Alphabet}
-import java.net.InetSocketAddress
-import java.nio.channels.AsynchronousChannelGroup
-import java.util.concurrent.Executors
+import scodec.bits.ByteVector
 import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext
 import scala.annotation.tailrec
 import org.http4s.Request
 import org.http4s.Method
 import org.http4s.Response
 import org.http4s._
-import org.http4s.circe._
-import _root_.io.circe._
 
 private[ember] object Server {
   private val logger = org.log4s.getLogger
@@ -63,14 +52,13 @@ private[ember] object Server {
   }
 
 
-  def requestPipe[F[_]: Sync]: Pipe[F, Byte, Request[F]] = stream => {
+  def requestPipe[F[_]: Sync](maxHeaderSize: Int): Pipe[F, Byte, Request[F]] = stream => {
     for{
-      (methodUriHttpVersionAndheaders, body) <- stream.through(seperateHeadersAndBody[F](4096))
+      (methodUriHttpVersionAndheaders, body) <- stream.through(seperateHeadersAndBody[F](maxHeaderSize))
     } yield headerBlobByteVectorToRequest[F](methodUriHttpVersionAndheaders, body)
   }
 
-
-  def respToBytes[F[_]: Sync](implicit ec: ExecutionContext): Pipe[F, Response[F], Byte] = _.flatMap{resp: Response[F] =>
+  def respToBytes[F[_]: Sync]: Pipe[F, Response[F], Byte] = _.flatMap{resp: Response[F] =>
     val statusInstances = new StatusInstances{}
     import statusInstances._
     val headerStrings : List[String] = resp.headers.map(h => h.name + ": " + h.value).toList
@@ -78,7 +66,7 @@ private[ember] object Server {
     val initSection = Stream(show"${resp.httpVersion} ${resp.status}") ++ Stream.emits(headerStrings)
 
     initSection.covary[F].intersperse("\r\n").through(text.utf8Encode) ++ 
-    Stream("\r\n\r\n").covary[F].through(text.utf8Encode) ++
+    Stream.chunk(ByteVectorChunk(`\r\n\r\n`)) ++
     resp.body
   }
 
@@ -179,9 +167,9 @@ private[ember] object Server {
 
   def getHttpVersion(s: String): HttpVersion = {
     logger.info("Unimplemented getHttpVersion")
+    val _ = s
     HttpVersion(1,2)
   }
-
 
   @tailrec
   def generateHeaders(byteVector: ByteVector)(acc: Headers) : Headers = {
@@ -207,8 +195,6 @@ private[ember] object Server {
     val index = byteVector.indexOfSlice(`\r\n`)
     if (index >= 0L) {
       val (line, rest) = byteVector.splitAt(index)
-      logger.trace(s"Split Header Line: ${line.decodeAscii}")
-      logger.trace(s"Split Header Rest: ${rest.decodeAscii}")
       Option((line, rest.drop(`\r\n`.length)))
     }
     else {

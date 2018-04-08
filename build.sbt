@@ -25,6 +25,8 @@ val specs2V = "4.0.3"
 val disciplineV = "0.8"
 val scShapelessV = "1.1.6"
 
+val logbackClassicV = "1.2.3"
+
 
 lazy val contributors = Seq(
   "ChristopherDavenport" -> "Christopher Davenport"
@@ -64,6 +66,8 @@ lazy val commonSettings = Seq(
     "io.circe"                    %% "circe-core"                 % circeV,
     "io.circe"                    %% "circe-generic"              % circeV,
     "io.circe"                    %% "circe-parser"               % circeV,
+
+    "ch.qos.logback"              % "logback-classic"             % logbackClassicV,
 
     // "org.tpolecat"                %% "doobie-core"                % doobieV,
     // "org.tpolecat"                %% "doobie-h2"                  % doobieV,
