@@ -41,16 +41,16 @@ lazy val commonSettings = Seq(
   addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.6" cross CrossVersion.binary),
 
   libraryDependencies ++= Seq(
-    "io.chrisdavenport"           %% "linebacker"                 % "0.0.4",
+    // "io.chrisdavenport"           %% "linebacker"                 % "0.0.4",
     "org.typelevel"               %% "cats-core"                  % catsV,
 
-    "org.typelevel"               %% "kittens"                    % kittensV,
-    "org.typelevel"               %% "alleycats-core"             % catsV,
-    "org.typelevel"               %% "mouse"                      % mouseV,
+    // "org.typelevel"               %% "kittens"                    % kittensV,
+    // "org.typelevel"               %% "alleycats-core"             % catsV,
+    // "org.typelevel"               %% "mouse"                      % mouseV,
 
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
 
-    "com.chuusai"                 %% "shapeless"                  % shapelessV,
+    // "com.chuusai"                 %% "shapeless"                  % shapelessV,
 
     "co.fs2"                      %% "fs2-core"                   % fs2V,
     "co.fs2"                      %% "fs2-io"                     % fs2V,
@@ -65,16 +65,16 @@ lazy val commonSettings = Seq(
     "io.circe"                    %% "circe-generic"              % circeV,
     "io.circe"                    %% "circe-parser"               % circeV,
 
-    "org.tpolecat"                %% "doobie-core"                % doobieV,
-    "org.tpolecat"                %% "doobie-h2"                  % doobieV,
-    "org.tpolecat"                %% "doobie-hikari"              % doobieV,
-    "org.tpolecat"                %% "doobie-postgres"            % doobieV,
-    "org.tpolecat"                %% "doobie-specs2"              % doobieV       % Test,
+    // "org.tpolecat"                %% "doobie-core"                % doobieV,
+    // "org.tpolecat"                %% "doobie-h2"                  % doobieV,
+    // "org.tpolecat"                %% "doobie-hikari"              % doobieV,
+    // "org.tpolecat"                %% "doobie-postgres"            % doobieV,
+    // "org.tpolecat"                %% "doobie-specs2"              % doobieV       % Test,
 
-    "com.github.pureconfig"       %% "pureconfig"                 % pureConfigV,
+    // "com.github.pureconfig"       %% "pureconfig"                 % pureConfigV,
 
-    "eu.timepit"                  %% "refined"                    % refinedV,
-    "eu.timepit"                  %% "refined-scalacheck"         % refinedV      % Test,
+    // "eu.timepit"                  %% "refined"                    % refinedV,
+    // "eu.timepit"                  %% "refined-scalacheck"         % refinedV      % Test,
 
     "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
     "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test,
