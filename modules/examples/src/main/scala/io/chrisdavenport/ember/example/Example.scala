@@ -13,9 +13,7 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.circe._
 import _root_.io.circe._
 
-// Switch These Object Lines To Create A Working Example
-// object Example extends StreamApp[IO]{
-object Example {
+object Example extends StreamApp[IO]{
 
   def stream(args: List[String], requestShutdown: IO[Unit]) : Stream[IO, StreamApp.ExitCode] = {
     val address = "0.0.0.0"
@@ -32,6 +30,7 @@ object Example {
     val requestHeaderReceiveTimeout: Duration = 5.seconds
 
     for {
+      sched <- Scheduler[IO](5)
       terminatedSignal <- Stream.eval(async.signalOf[IO, Boolean](false)(Effect[IO], appEC))
       exitCodeRef <- Stream.eval(async.refOf[IO, StreamApp.ExitCode](StreamApp.ExitCode.Success))
       exitCode <- _root_.io.chrisdavenport.ember.server[IO](

@@ -1,5 +1,5 @@
 lazy val ember = project.in(file("."))
-  .aggregate(core)
+  .aggregate(core, examples)
   .settings(noPublish)
 
 lazy val core = project.in(file("modules/core"))
@@ -8,6 +8,23 @@ lazy val core = project.in(file("modules/core"))
     .settings(
       name := projectName("core")
     )
+
+lazy val examples = project.in(file("modules/examples"))
+  .settings(commonSettings)
+  .settings(noPublish)
+  .dependsOn(core)
+  .settings(
+    name := projectName("examples"),
+    libraryDependencies ++= Seq(
+      "org.http4s"                  %% "http4s-circe"               % http4sV,
+      "org.http4s"                  %% "http4s-dsl"                 % http4sV,
+      "io.circe"                    %% "circe-core"                 % circeV,
+      "io.circe"                    %% "circe-generic"              % circeV,
+      "io.circe"                    %% "circe-parser"               % circeV,
+
+      "ch.qos.logback"              % "logback-classic"             % logbackClassicV,
+    )
+  )
 
 val catsV = "1.1.0"
 val kittensV = "1.0.0-RC3"
@@ -43,42 +60,13 @@ lazy val commonSettings = Seq(
   addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.6" cross CrossVersion.binary),
 
   libraryDependencies ++= Seq(
-    // "io.chrisdavenport"           %% "linebacker"                 % "0.0.4",
     "org.typelevel"               %% "cats-core"                  % catsV,
-
-    // "org.typelevel"               %% "kittens"                    % kittensV,
-    // "org.typelevel"               %% "alleycats-core"             % catsV,
-    // "org.typelevel"               %% "mouse"                      % mouseV,
-
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
-
-    // "com.chuusai"                 %% "shapeless"                  % shapelessV,
-
     "co.fs2"                      %% "fs2-core"                   % fs2V,
     "co.fs2"                      %% "fs2-io"                     % fs2V,
     "co.fs2"                      %% "fs2-scodec"                 % fs2V,
-
-    "org.http4s"                  %% "http4s-dsl"                 % http4sV,
-    "org.http4s"                  %% "http4s-blaze-server"        % http4sV,
-    "org.http4s"                  %% "http4s-blaze-client"        % http4sV,
-    "org.http4s"                  %% "http4s-circe"               % http4sV,
-
-    "io.circe"                    %% "circe-core"                 % circeV,
-    "io.circe"                    %% "circe-generic"              % circeV,
-    "io.circe"                    %% "circe-parser"               % circeV,
-
-    "ch.qos.logback"              % "logback-classic"             % logbackClassicV,
-
-    // "org.tpolecat"                %% "doobie-core"                % doobieV,
-    // "org.tpolecat"                %% "doobie-h2"                  % doobieV,
-    // "org.tpolecat"                %% "doobie-hikari"              % doobieV,
-    // "org.tpolecat"                %% "doobie-postgres"            % doobieV,
-    // "org.tpolecat"                %% "doobie-specs2"              % doobieV       % Test,
-
-    // "com.github.pureconfig"       %% "pureconfig"                 % pureConfigV,
-
-    // "eu.timepit"                  %% "refined"                    % refinedV,
-    // "eu.timepit"                  %% "refined-scalacheck"         % refinedV      % Test,
+    "org.http4s"                  %% "http4s-server"              % http4sV,
+    // "org.http4s"                  %% "http4s-blaze-client"        % http4sV,
 
     "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
     "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test,
