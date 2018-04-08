@@ -17,6 +17,12 @@ import java.util.concurrent.Executors
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 import scala.annotation.tailrec
+import org.http4s.Request
+import org.http4s.Method
+import org.http4s.Response
+import org.http4s._
+import org.http4s.circe._
+import _root_.io.circe._
 
 object Server extends StreamApp[IO] {
   private val logger = org.log4s.getLogger
@@ -26,32 +32,52 @@ object Server extends StreamApp[IO] {
     val port = 8080
     implicit val appEC = ExecutionContext.global
     implicit val acg = AsynchronousChannelGroup.withFixedThreadPool(100, Executors.defaultThreadFactory)
+
+    val maxConcurrency: Int = Int.MaxValue
+    val receiveBufferSize: Int = 256 * 1024
+    val maxHeaderSize: Int = 10 *1024
+    val requestHeaderReceiveTimeout: Duration = 5.seconds
+    val (initial, readDuration) = requestHeaderReceiveTimeout match {
+      case fin: FiniteDuration => (true, fin)
+      case _ => (false, 0.millis)
+    }
     // val helloResponse = Stream("http/1.1 200\r\n\r\n<h1> Hello! </h1>").through(texxt.utf8Encode).chunk
     for {
       schedule <- Scheduler[IO](10)
       counter <- Stream.eval(async.refOf[IO, Int](0))
-      timeoutSignal <- Stream.eval(async.signalOf[IO, Boolean](true))
-      _ <- tcp.server[IO](new InetSocketAddress(address, port))
-        .map(_.flatMap(socket => 
-            socket.reads(256 * 1024, 10.seconds.some)
-              .through(requestPipe(socket.endOfInput))
+      _ : Unit<- tcp.server[IO](new InetSocketAddress(address, port)).map(_.flatMap(socket =>
+          Stream.eval(async.signalOf[IO, Boolean](initial)).flatMap{ timeoutSignal =>  
+            readWithTimeout(socket, readDuration, timeoutSignal.get, receiveBufferSize)
+              .through(requestPipe)
               .take(1)
-              .evalMap(text => IO(println(s"Request: $text")).as(text))
-              .through(httpServiceToPipe[IO](service))
-              .take(1)
-              .attempt
-              .flatMap{
-                case Left(e) => Stream.empty
-                case Right(r) => 
-                  Stream(r)
-                    .covary[IO]
-                    .through(respToBytes)
-                    .to(socket.writes())
-                    .onFinalize(socket.endOfOutput)
-                    .drain
+              .flatMap{ req => 
+                Stream.eval_(timeoutSignal.set(false)) ++
+                Stream(req).covary[IO].through(httpServiceToPipe[IO](service)).take(1)
+                  .handleErrorWith(e => Stream(Response[IO](Status.InternalServerError)).take(1))
+                  .map(resp => (req, resp))
               }
-        )
-        ).joinUnbounded.void
+              .attempt
+              .evalMap{ attempted => 
+                def send(request:Option[Request[IO]], resp: Response[IO]): IO[Unit] = {
+                  Stream(resp).covary[IO]
+                  .through(respToBytes)
+                  .through(socket.writes())
+                  .onFinalize(socket.endOfOutput)
+                  .compile
+                  .drain
+                  .attempt
+                  .flatMap{
+                    case Left(err) => Stream.empty.covary[IO].compile.drain
+                    case Right(()) => IO.unit
+                  }
+                }
+                attempted match {
+                  case Right((request, response)) => send(Some(request), response)
+                  case Left(err) => Stream(Response[IO](Status.InternalServerError)).evalMap { send(None, _) }.compile.drain
+                }
+              }.drain
+          }
+        )).join(maxConcurrency)
       _ <- Stream.eval(IO(println("Exiting App From Exit Code")))
       exitCode <- ExitCode.Success.pure[Stream[IO, ?]]
     } yield exitCode
@@ -59,26 +85,37 @@ object Server extends StreamApp[IO] {
     
   }
 
-  import org.http4s.Request
-  import org.http4s.Method
-  import org.http4s.Response
-  import org.http4s._
-  import org.http4s.circe._
-  import _root_.io.circe._
-  def requestPipe(endOfInput: IO[Unit]): Pipe[IO, Byte, Request[IO]] = stream => for{
-    (methodUriHttpVersionAndheaders, body) <- stream.through(seperateHeadersAndBody(4096))
-    req <- Stream(headerBlobByteVectorToRequest(methodUriHttpVersionAndheaders, body))
-  } yield req
+    def readWithTimeout[F[_]](
+    socket: Socket[F]
+    , timeout: FiniteDuration
+    , shallTimeout: F[Boolean]
+    , chunkSize: Int
+  )(implicit F: Effect[F]) : Stream[F, Byte] = {
+    def go(remains:FiniteDuration) : Stream[F, Byte] = {
+      Stream.eval(shallTimeout).flatMap { shallTimeout =>
+        if (!shallTimeout) socket.reads(chunkSize, None)
+        else {
+          if (remains <= 0.millis) Stream.raiseError(new Exception("Timeout!"))
+          else {
+            Stream.eval(F.delay(System.currentTimeMillis())).flatMap { start =>
+            Stream.eval(socket.read(chunkSize, Some(remains))).flatMap { read =>
+            Stream.eval(F.delay(System.currentTimeMillis())).flatMap { end => read match {
+              case Some(bytes) => Stream.chunk(bytes) ++ go(remains - (end - start).millis)
+              case None => Stream.empty
+            }}}}
+          }
+        }
+      }
+    }
 
-  def reqToResp(r: async.Ref[IO, Int]): Pipe[IO, Request[IO], Response[IO]] = _.evalMap{req =>
-    for {
-      value <- r.modify{_ + 1}.map(_.now)
-      out <- Response[IO](Status.Ok)
-      .withBody(Json.obj("visitor" -> Json.fromInt(value)))
-    } yield out
-
+    go(timeout)
   }
 
+  def requestPipe: Pipe[IO, Byte, Request[IO]] = stream => {
+    for{
+      (methodUriHttpVersionAndheaders, body) <- stream.through(seperateHeadersAndBody(4096))
+    } yield headerBlobByteVectorToRequest(methodUriHttpVersionAndheaders, body)
+  }
 
   def respToBytes(implicit ec: ExecutionContext): Pipe[IO, Response[IO], Byte] = _.flatMap{resp: Response[IO] =>
     val statusInstances = new StatusInstances{}
@@ -92,13 +129,9 @@ object Server extends StreamApp[IO] {
     resp.body
   }
 
-
   val `\n` : ByteVector = ByteVector('\n')
-
   val `\r` : ByteVector = ByteVector('\r')
-
   val `\r\n`: ByteVector = ByteVector('\r','\n')
-
   val `\r\n\r\n` = (`\r\n` ++ `\r\n`).compact
 
     /**
@@ -138,16 +171,6 @@ object Server extends StreamApp[IO] {
     }
   }
 
-    /**
-    * Reads http header and body from the stream of bytes.
-    *
-    * If the body is encoded in chunked encoding this will decode it
-    *
-    * @param maxHeaderSize    Maximum size of the http header
-    * @param headerCodec      header codec to use
-    * @tparam F
-    * @return
-    */
   def seperateHeadersAndBody[F[_]](
     maxHeaderSize: Int
   ): Pipe[F, Byte, (ByteVector, Stream[F, Byte])] = {
@@ -155,10 +178,6 @@ object Server extends StreamApp[IO] {
       Stream.emit(header -> bodyRaw)
     }
   }
-
-  private val CRLFBytes = ByteVector('\r','\n')
-
-
 
   def headerBlobByteVectorToRequest(b: ByteVector, s: Stream[IO, Byte]): Request[IO] = {
     val (methodHttpUri, headersBV) = splitHeader(b).fold(throw new Throwable("Invalid Empty Init Line"))(identity)
@@ -221,10 +240,7 @@ object Server extends StreamApp[IO] {
           if idx >= 0
           header = Header(line.substring(0, idx), line.substring(idx + 1).trim)
         } yield header
-
-
         val newHeaders = acc ++ headerO
-
         logger.trace(s"Generate Headers Header0 = $headerO")
         generateHeaders(rest)(newHeaders)
       case None => acc
@@ -233,14 +249,12 @@ object Server extends StreamApp[IO] {
   }
 
   def splitHeader(byteVector: ByteVector): Option[(ByteVector, ByteVector)] = {
-    val index = byteVector.indexOfSlice(CRLFBytes)
-
+    val index = byteVector.indexOfSlice(`\r\n`)
     if (index >= 0L) {
       val (line, rest) = byteVector.splitAt(index)
-
       logger.trace(s"Split Header Line: ${line.decodeAscii}")
       logger.trace(s"Split Header Rest: ${rest.decodeAscii}")
-      Option((line, rest.drop(CRLFBytes.length)))
+      Option((line, rest.drop(`\r\n`.length)))
     }
     else {
       Option.empty[(ByteVector, ByteVector)]
