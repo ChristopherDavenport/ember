@@ -52,7 +52,7 @@ object Server extends StreamApp[IO] {
               .take(1)
               .flatMap{ req => 
                 Stream.eval_(IO(println(s"Request Processed $req"))) ++
-                Stream.eval_(timeoutSignal.set(false)) ++
+                // Stream.eval_(timeoutSignal.set(false)) ++
                 Stream(req).covary[IO].through(httpServiceToPipe[IO](service)).take(1)
                   .handleErrorWith(e => Stream(Response[IO](Status.InternalServerError)).take(1))
                   .map(resp => (req, resp))
@@ -172,11 +172,11 @@ object Server extends StreamApp[IO] {
     }
   }
 
-  def seperateHeadersAndBody[F[_]](
+  def seperateHeadersAndBody[F[_]: Sync](
     maxHeaderSize: Int
   ): Pipe[F, Byte, (ByteVector, Stream[F, Byte])] = {
     _ through httpHeaderAndBody(maxHeaderSize) flatMap { case (header, bodyRaw) =>
-      Stream.emit(header -> bodyRaw)
+      Stream.emit(header -> (bodyRaw ++ Stream.eval_(Sync[F].delay(println("Stream Finished"))))).covary[F]
     }
   }
 
@@ -287,8 +287,8 @@ object Server extends StreamApp[IO] {
   }
 
   def writeBody[F[_]: Sync](s: Stream[F, Byte]): F[Unit] = {
-    s.through(text.utf8Decode[F]).through(text.lines[F])
-    .evalMap(l => Sync[F].delay(println(s"Line: $l")))
+    s.through(text.utf8Decode[F])
+    .evalMap(l => Sync[F].delay(println(s"Body:\n$l")))
     .compile
     .drain
   }
