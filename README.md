@@ -1,4 +1,4 @@
-# ember
+# ember [![Build Status](https://travis-ci.org/ChristopherDavenport/ember.svg?branch=master)](https://travis-ci.org/ChristopherDavenport/ember)
 
 A functional fs2 backend for http.
 
