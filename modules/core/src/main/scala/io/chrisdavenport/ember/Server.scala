@@ -1,7 +1,7 @@
 package io.chrisdavenport.ember
 
 
-// import cats._
+import cats._
 import cats.effect._
 import cats.implicits._
 import fs2._
@@ -37,7 +37,7 @@ object Server extends StreamApp[IO] {
               .through(requestPipe(socket.endOfInput))
               .take(1)
               .evalMap(text => IO(println(s"Request: $text")).as(text))
-              .through(reqToResp(counter))
+              .through(httpServiceToPipe[IO](service))
               .take(1)
               .attempt
               .flatMap{
@@ -50,8 +50,6 @@ object Server extends StreamApp[IO] {
                     .onFinalize(socket.endOfOutput)
                     .drain
               }
-              
-
         )
         ).joinUnbounded.void
       _ <- Stream.eval(IO(println("Exiting App From Exit Code")))
@@ -87,7 +85,6 @@ object Server extends StreamApp[IO] {
     import statusInstances._
     val headerStrings : List[String] = resp.headers.map(h => h.name + ": " + h.value).toList
 
-    
     val initSection = Stream(show"${resp.httpVersion} ${resp.status}") ++ Stream.emits(headerStrings)
 
     initSection.covary[IO].intersperse("\r\n").through(text.utf8Encode) ++ 
@@ -248,6 +245,26 @@ object Server extends StreamApp[IO] {
     else {
       Option.empty[(ByteVector, ByteVector)]
     }
+  }
+
+  def service : HttpService[IO] = {
+    val dsl = new org.http4s.dsl.Http4sDsl[IO]{}
+    import dsl._
+    
+    HttpService[IO]{
+      case req @ POST -> Root  => 
+        req.decodeJson[Json].flatMap{ j => 
+          Ok(j)
+
+        }
+      case GET -> Root => 
+        Ok(Json.obj("root" -> Json.fromString("GET")))
+    }
+  }
+
+  def httpServiceToPipe[F[_]: Sync](h: HttpService[F]): Pipe[F, Request[F], Response[F]] = _.evalMap{req => 
+    h(req).value.map(_.fold(Response[F](Status.NotFound))(identity))
+      .handleErrorWith(t => Response[F](Status.InternalServerError).pure[F])
   }
 
 }
