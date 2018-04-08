@@ -47,14 +47,15 @@ object Server extends StreamApp[IO] {
       counter <- Stream.eval(async.refOf[IO, Int](0))
       _ : Unit<- tcp.server[IO](new InetSocketAddress(address, port)).map(_.flatMap(socket =>
           Stream.eval(async.signalOf[IO, Boolean](initial)).flatMap{ timeoutSignal =>  
-            readWithTimeout(socket, readDuration, timeoutSignal.get, receiveBufferSize)
+            socket.reads(receiveBufferSize, readDuration.some)
               .through(requestPipe)
               .take(1)
               .flatMap{ req => 
                 Stream.eval_(IO(println(s"Request Processed $req"))) ++
-                // Stream.eval_(timeoutSignal.set(false)) ++
+                Stream.eval_(timeoutSignal.set(false)) ++
                 Stream(req).covary[IO].through(httpServiceToPipe[IO](service)).take(1)
                   .handleErrorWith(e => Stream(Response[IO](Status.InternalServerError)).take(1))
+                  .flatTap(resp => Stream.eval(IO(println(s"Response Created $resp"))))
                   .map(resp => (req, resp))
               }
               .attempt
@@ -101,8 +102,11 @@ object Server extends StreamApp[IO] {
             Stream.eval(F.delay(System.currentTimeMillis())).flatMap { start =>
             Stream.eval(socket.read(chunkSize, Some(remains))).flatMap { read =>
             Stream.eval(F.delay(System.currentTimeMillis())).flatMap { end => read match {
-              case Some(bytes) => Stream.chunk(bytes) ++ go(remains - (end - start).millis)
-              case None => Stream.empty
+              case Some(bytes) => 
+                Stream.chunk(bytes) ++ go(remains - (end - start).millis)
+              case None => 
+                Stream.eval_(Sync[F].delay(println("End of Input From Socket"))) ++
+                Stream.empty
             }}}}
           }
         }
@@ -111,6 +115,10 @@ object Server extends StreamApp[IO] {
 
     go(timeout)
   }
+
+  // def readWithTimeout[F[_]: Sync]()
+
+
 
   def requestPipe: Pipe[IO, Byte, Request[IO]] = stream => {
     for{
@@ -184,13 +192,15 @@ object Server extends StreamApp[IO] {
     val (methodHttpUri, headersBV) = splitHeader(b).fold(throw new Throwable("Invalid Empty Init Line"))(identity)
     val headers = generateHeaders(headersBV)(Headers.empty)
     val (method, uri, http) = bvToRequestTopLine(methodHttpUri)
+    
+    val contentLength = headers.get(org.http4s.headers.`Content-Length`).map(_.length).getOrElse(0L)
 
     Request[IO](
       method = method,
       uri = uri,
       httpVersion = http,
       headers = headers,
-      body = s
+      body = s.take(contentLength)
     )
   }
 
@@ -269,28 +279,12 @@ object Server extends StreamApp[IO] {
     HttpService[F]{
       case req @ POST -> Root  => 
         for {
-          _ <- Sync[F].delay(println("Post Beginning"))
-          _ <- writeBody[F](req.body)
-          // _ <- bodyStream.through(text.utf8Decode)
-          // _ <- req.body.through(text.utf8Decode[IO](IO.ioConcurrentEffect))
-            // // .through(text.utf8Decode[IO])
-            // .through(text.lines[IO])
-            // .evalMap(line => IO(println(s"Line: $line")))
-            // .compile
-            // .drain
-          resp <- Ok("Finished Processing")
-          _ <- Sync[F].delay(println("Response Created Correctly"))
+          json <- req.decodeJson[Json]
+          resp <- Ok(json)
         } yield resp
       case GET -> Root => 
         Ok(Json.obj("root" -> Json.fromString("GET")))
     }
-  }
-
-  def writeBody[F[_]: Sync](s: Stream[F, Byte]): F[Unit] = {
-    s.through(text.utf8Decode[F])
-    .evalMap(l => Sync[F].delay(println(s"Body:\n$l")))
-    .compile
-    .drain
   }
 
   def httpServiceToPipe[F[_]: Sync](h: HttpService[F]): Pipe[F, Request[F], Response[F]] = _.evalMap{req => 
