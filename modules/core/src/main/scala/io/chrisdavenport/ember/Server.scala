@@ -51,6 +51,7 @@ object Server extends StreamApp[IO] {
               .through(requestPipe)
               .take(1)
               .flatMap{ req => 
+                Stream.eval_(IO(println(s"Request Processed $req"))) ++
                 Stream.eval_(timeoutSignal.set(false)) ++
                 Stream(req).covary[IO].through(httpServiceToPipe[IO](service)).take(1)
                   .handleErrorWith(e => Stream(Response[IO](Status.InternalServerError)).take(1))
@@ -159,7 +160,7 @@ object Server extends StreamApp[IO] {
       }
     }
 
-    src => go(ByteVector.empty, src) stream
+    src => go(ByteVector.empty, src).stream
   }
 
   def chunk2ByteVector(chunk: Chunk[Byte]):ByteVector = {
@@ -261,19 +262,35 @@ object Server extends StreamApp[IO] {
     }
   }
 
-  def service : HttpService[IO] = {
-    val dsl = new org.http4s.dsl.Http4sDsl[IO]{}
+  def service[F[_]: Sync] : HttpService[F] = {
+    val dsl = new org.http4s.dsl.Http4sDsl[F]{}
     import dsl._
     
-    HttpService[IO]{
+    HttpService[F]{
       case req @ POST -> Root  => 
-        req.decodeJson[Json].flatMap{ j => 
-          Ok(j)
-
-        }
+        for {
+          _ <- Sync[F].delay(println("Post Beginning"))
+          _ <- writeBody[F](req.body)
+          // _ <- bodyStream.through(text.utf8Decode)
+          // _ <- req.body.through(text.utf8Decode[IO](IO.ioConcurrentEffect))
+            // // .through(text.utf8Decode[IO])
+            // .through(text.lines[IO])
+            // .evalMap(line => IO(println(s"Line: $line")))
+            // .compile
+            // .drain
+          resp <- Ok("Finished Processing")
+          _ <- Sync[F].delay(println("Response Created Correctly"))
+        } yield resp
       case GET -> Root => 
         Ok(Json.obj("root" -> Json.fromString("GET")))
     }
+  }
+
+  def writeBody[F[_]: Sync](s: Stream[F, Byte]): F[Unit] = {
+    s.through(text.utf8Decode[F]).through(text.lines[F])
+    .evalMap(l => Sync[F].delay(println(s"Line: $l")))
+    .compile
+    .drain
   }
 
   def httpServiceToPipe[F[_]: Sync](h: HttpService[F]): Pipe[F, Request[F], Response[F]] = _.evalMap{req => 
