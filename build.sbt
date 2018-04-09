@@ -1,5 +1,6 @@
-lazy val ember = project.in(file("."))
+lazy val root = project.in(file("."))
   .aggregate(core, examples)
+  .settings(commonSettings)
   .settings(noPublish)
 
 lazy val core = project.in(file("modules/core"))
