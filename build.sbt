@@ -74,7 +74,7 @@ lazy val commonSettings = Seq(
     "org.typelevel"               %% "discipline"                 % disciplineV   % Test,
     "com.github.alexarchambault"  %% "scalacheck-shapeless_1.13"  % scShapelessV  % Test
   )
-)
+) ++ releaseSettings
 
 lazy val releaseSettings = {
   import ReleaseTransformations._
