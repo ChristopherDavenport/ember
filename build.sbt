@@ -65,7 +65,7 @@ lazy val commonSettings = Seq(
     "co.fs2"                      %% "fs2-core"                   % fs2V,
     "co.fs2"                      %% "fs2-io"                     % fs2V,
     "co.fs2"                      %% "fs2-scodec"                 % fs2V,
-    "org.http4s"                  %% "http4s-server"              % http4sV,
+    "org.http4s"                  %% "http4s-core"              % http4sV,
     // "org.http4s"                  %% "http4s-blaze-client"        % http4sV,
 
     "org.specs2"                  %% "specs2-core"                % specs2V       % Test,

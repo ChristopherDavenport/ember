@@ -15,10 +15,8 @@ import org.http4s.Response
 import org.http4s._
 import codec.Shared._
 
-private[ember] object Server {
-  private val logger = org.log4s.getLogger
-
-  /**
+package object util {
+    /**
    * The issue with a normal http body is that there is no termination character, 
    * thus unless you have content-length and the client still has their input side open, 
    * the server cannot know whether more data follows or not
@@ -59,23 +57,5 @@ private[ember] object Server {
     go(timeout)
   }
 
-  def respToBytes[F[_]: Sync]: Pipe[F, Response[F], Byte] = _.flatMap{resp: Response[F] =>
-    val statusInstances = new StatusInstances{}
-    import statusInstances._
-    val headerStrings : List[String] = resp.headers.map(h => h.name + ": " + h.value).toList
-
-    val initSection = Stream(show"${resp.httpVersion} ${resp.status}") ++ Stream.emits(headerStrings)
-
-    val body = Alternative[Option].guard(resp.isChunked)
-      .fold(resp.body)(_ => resp.body.through(codec.ChunkedEncoding.encode[F]))
-
-    initSection.covary[F].intersperse("\r\n").through(text.utf8Encode) ++ 
-    Stream.chunk(ByteVectorChunk(`\r\n\r\n`)) ++
-    resp.body
-  }
-
-  def httpServiceToPipe[F[_]: Sync](h: HttpService[F], onMissing: Response[F]): Pipe[F, Request[F], Response[F]] = _.evalMap{req => 
-    h(req).value.map(_.fold(onMissing)(identity))
-  }
 
 }

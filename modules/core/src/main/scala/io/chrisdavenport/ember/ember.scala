@@ -10,9 +10,11 @@ import scala.concurrent.duration._
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousChannelGroup
 import org.http4s._
-import _root_.io.chrisdavenport.ember.codec._
+import _root_.io.chrisdavenport.ember.codec.{Encoder, Parser}
+import _root_.io.chrisdavenport.ember.util.readWithTimeout
 
 package object ember {
+
   private val logger = org.log4s.getLogger
 
   def server[F[_]: Effect](
@@ -41,13 +43,13 @@ package object ember {
         socket =>
           Stream.eval(async.signalOf[F, Boolean](initial)).flatMap{ 
             timeoutSignal =>  
-            Server.readWithTimeout[F](socket, readDuration, timeoutSignal.get, receiveBufferSize)
+              readWithTimeout[F](socket, readDuration, timeoutSignal.get, receiveBufferSize)
               .through(Parser.Req.parser(maxHeaderSize))
               .take(1)
               .flatMap{ req => 
                 Stream.eval_(Sync[F].delay(logger.debug(s"Request Processed $req"))) ++
                 Stream.eval_(timeoutSignal.set(false)) ++
-                Stream(req).covary[F].through(Server.httpServiceToPipe[F](service, onMissing)).take(1)
+                Stream(req).covary[F].through(Encoder.httpServiceToPipe[F](service, onMissing)).take(1)
                   .handleErrorWith(onError).take(1)
                   .flatTap(resp => Stream.eval(Sync[F].delay(logger.debug(s"Response Created $resp"))))
                   .map(resp => (req, resp))
@@ -57,7 +59,7 @@ package object ember {
                 def send(request:Option[Request[F]], resp: Response[F]): F[Unit] = {
                   Stream(resp)
                   .covary[F]
-                  .through(Server.respToBytes[F])
+                  .through(Encoder.respToBytes[F])
                   .through(socket.writes())
                   .onFinalize(socket.endOfOutput)
                   .compile
