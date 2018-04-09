@@ -21,5 +21,7 @@ This currently works for request response pairs that operate with a known Conten
 
 ## Future Work
 
-- [ ] Chunked Encoding
+- [x] Chunked Encoding
 - [ ] Websocket Support
+- [ ] Client Support
+- [ ] Websocket Client

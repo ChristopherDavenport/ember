@@ -1,5 +1,6 @@
 package io.chrisdavenport.ember
 
+import cats._
 import cats.effect._
 import cats.implicits._
 import fs2._
@@ -58,9 +59,6 @@ private[ember] object Server {
     go(timeout)
   }
 
-
-
-
   def respToBytes[F[_]: Sync]: Pipe[F, Response[F], Byte] = _.flatMap{resp: Response[F] =>
     val statusInstances = new StatusInstances{}
     import statusInstances._
@@ -68,65 +66,13 @@ private[ember] object Server {
 
     val initSection = Stream(show"${resp.httpVersion} ${resp.status}") ++ Stream.emits(headerStrings)
 
+    val body = Alternative[Option].guard(resp.isChunked)
+      .fold(resp.body)(_ => resp.body.through(codec.ChunkedEncoding.encode[F]))
+
     initSection.covary[F].intersperse("\r\n").through(text.utf8Encode) ++ 
     Stream.chunk(ByteVectorChunk(`\r\n\r\n`)) ++
     resp.body
   }
-
-  // val `\n` : ByteVector = ByteVector('\n')
-  // val `\r` : ByteVector = ByteVector('\r')
-  // val `\r\n`: ByteVector = ByteVector('\r','\n')
-  // val `\r\n\r\n` = (`\r\n` ++ `\r\n`).compact
-
-  //   /**
-  //   * From the stream of bytes this extracts Http Header and body part.
-  //   */
-  // def httpHeaderAndBody[F[_]](maxHeaderSize: Int): Pipe[F, Byte, (ByteVector, Stream[F, Byte])] = {
-  //   def go(buff: ByteVector, in: Stream[F, Byte]): Pull[F, (ByteVector, Stream[F, Byte]), Unit] = {
-  //     in.pull.unconsChunk flatMap {
-  //       case None =>
-  //         Pull.raiseError(new Throwable(s"Incomplete Header received (sz = ${buff.size}): ${buff.decodeUtf8}"))
-  //       case Some((chunk, tl)) =>
-  //         val bv = chunk2ByteVector(chunk)
-  //         val all = buff ++ bv
-  //         val idx = all.indexOfSlice(`\r\n\r\n`)
-  //         if (idx < 0) {
-  //           if (all.size > maxHeaderSize) Pull.raiseError(new Throwable(s"Size of the header exceeded the limit of $maxHeaderSize (${all.size})"))
-  //           else go(all, tl)
-  //         }
-  //         else {
-  //           val (h, t) = all.splitAt(idx)
-  //           if (h.size > maxHeaderSize)  Pull.raiseError(new Throwable(s"Size of the header exceeded the limit of $maxHeaderSize (${all.size})"))
-  //           else  Pull.output1((h, Stream.chunk(ByteVectorChunk(t.drop(`\r\n\r\n`.size))) ++ tl))
-
-  //         }
-  //     }
-  //   }
-
-  //   src => go(ByteVector.empty, src).stream
-  // }
-
-  // def chunk2ByteVector(chunk: Chunk[Byte]):ByteVector = {
-  //   chunk match  {
-  //     case bv: ByteVectorChunk => bv.toByteVector
-  //     case other =>
-  //       val bs = other.toBytes
-  //       ByteVector(bs.values, bs.offset, bs.size)
-  //   }
-  // }
-
-  // def seperateHeadersAndBody[F[_]: Sync](
-  //   maxHeaderSize: Int
-  // ): Pipe[F, Byte, (ByteVector, Stream[F, Byte])] = {
-  //   _ through httpHeaderAndBody(maxHeaderSize) flatMap { case (header, bodyRaw) =>
-  //     Stream.emit(header -> bodyRaw) 
-  //   }
-  // }
-
-
-
-
-
 
   def httpServiceToPipe[F[_]: Sync](h: HttpService[F], onMissing: Response[F]): Pipe[F, Request[F], Response[F]] = _.evalMap{req => 
     h(req).value.map(_.fold(onMissing)(identity))

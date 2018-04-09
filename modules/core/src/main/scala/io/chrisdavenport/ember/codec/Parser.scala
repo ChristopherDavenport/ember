@@ -1,5 +1,7 @@
 package io.chrisdavenport.ember.codec
 
+import cats._
+import cats.implicits._
 import io.chrisdavenport.ember
 import fs2._
 import scodec.bits.ByteVector
@@ -74,21 +76,26 @@ object Parser {
 
     def parser[F[_]: Sync](maxHeaderLength: Int): Pipe[F, Byte, Request[F]] =
       _.through(httpHeaderAndBody[F](maxHeaderLength))
-        .map{case (bv, body) => headerBlobByteVectorToRequest[F](bv, body)}
+        .map{case (bv, body) => headerBlobByteVectorToRequest[F](bv, body, maxHeaderLength)}
 
-    def headerBlobByteVectorToRequest[F[_]: Sync](b: ByteVector, s: Stream[F, Byte]): Request[F] = {
+    def headerBlobByteVectorToRequest[F[_]: Sync](b: ByteVector, s: Stream[F, Byte], maxHeaderLength: Int): Request[F] = {
       val (methodHttpUri, headersBV) = splitHeader(b).fold(throw new Throwable("Invalid Empty Init Line"))(identity)
       val headers = generateHeaders(headersBV)(Headers.empty)
       val (method, uri, http) = bvToRequestTopLine(methodHttpUri)
       
       val contentLength = headers.get(org.http4s.headers.`Content-Length`).map(_.length).getOrElse(0L)
+      val isChunked = headers.get(org.http4s.headers.`Transfer-Encoding`).exists(_.value.toList.contains(TransferCoding.chunked))
+
+      val body = Alternative[Option].guard(isChunked).fold(
+        s.take(contentLength)
+      )(_ => s.through(ChunkedEncoding.decode(maxHeaderLength)))
 
       Request[F](
         method = method,
         uri = uri,
         httpVersion = http,
         headers = headers,
-        body = s.take(contentLength)
+        body = body
       )
     }
 
