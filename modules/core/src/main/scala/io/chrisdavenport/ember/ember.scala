@@ -10,6 +10,7 @@ import scala.concurrent.duration._
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousChannelGroup
 import org.http4s._
+import _root_.io.chrisdavenport.ember.codec._
 
 package object ember {
   private val logger = org.log4s.getLogger
@@ -26,9 +27,8 @@ package object ember {
     onWriteFailure : (Option[Request[F]], Response[F], Throwable) => Stream[F, Nothing],
     ec: ExecutionContext,
     ag: AsynchronousChannelGroup,
-    terminationSignal: async.immutable.Signal[F, Boolean],
-    exitCode: async.Ref[F, StreamApp.ExitCode]
-  ): Stream[F, StreamApp.ExitCode] = {
+    terminationSignal: async.immutable.Signal[F, Boolean]
+  ): Stream[F, Nothing] = {
     implicit val AG = ag
     implicit val EC = ec
     val (initial, readDuration) = requestHeaderReceiveTimeout match {
@@ -42,7 +42,7 @@ package object ember {
           Stream.eval(async.signalOf[F, Boolean](initial)).flatMap{ 
             timeoutSignal =>  
             Server.readWithTimeout[F](socket, readDuration, timeoutSignal.get, receiveBufferSize)
-              .through(Server.requestPipe(maxHeaderSize))
+              .through(Parser.Req.parser(maxHeaderSize))
               .take(1)
               .flatMap{ req => 
                 Stream.eval_(Sync[F].delay(logger.debug(s"Request Processed $req"))) ++
@@ -76,7 +76,7 @@ package object ember {
           }
         )).join(maxConcurrency)
           .interruptWhen(terminationSignal)
-          .drain ++ Stream.eval(exitCode.get)
+          .drain
   }
 
 }

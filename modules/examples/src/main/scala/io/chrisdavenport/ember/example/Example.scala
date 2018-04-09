@@ -32,7 +32,6 @@ object Example extends StreamApp[IO]{
     for {
       sched <- Scheduler[IO](5)
       terminatedSignal <- Stream.eval(async.signalOf[IO, Boolean](false)(Effect[IO], appEC))
-      exitCodeRef <- Stream.eval(async.refOf[IO, StreamApp.ExitCode](StreamApp.ExitCode.Success))
       exitCode <- _root_.io.chrisdavenport.ember.server[IO](
         maxConcurrency,
         receiveBufferSize,
@@ -45,8 +44,7 @@ object Example extends StreamApp[IO]{
         (_,_, _) => Stream.empty,
         appEC,
         acg,
-        terminatedSignal,
-        exitCodeRef
+        terminatedSignal
       )
     } yield exitCode
   }
