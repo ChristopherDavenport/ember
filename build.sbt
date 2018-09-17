@@ -58,7 +58,7 @@ lazy val commonSettings = Seq(
   resolvers += "JitPack" at "https://jitpack.io",
 
   addCompilerPlugin("com.github.oleg-py" %% "better-monadic-for" % "0.1.0"),
-  addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.6" cross CrossVersion.binary),
+  addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.7" cross CrossVersion.binary),
 
   libraryDependencies ++= Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
