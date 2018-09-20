@@ -27,7 +27,7 @@ lazy val examples = project.in(file("modules/examples"))
     )
   )
 
-val catsV = "1.1.0"
+val catsV = "1.4.0"
 val kittensV = "1.0.0-RC3"
 val catsEffectV = "0.10"
 val mouseV = "0.16"
