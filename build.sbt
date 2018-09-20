@@ -57,7 +57,7 @@ lazy val commonSettings = Seq(
   crossScalaVersions := Seq(scalaVersion.value, "2.11.12"),
   resolvers += "JitPack" at "https://jitpack.io",
 
-  addCompilerPlugin("com.github.oleg-py" %% "better-monadic-for" % "0.1.0"),
+  addCompilerPlugin("com.github.oleg-py" %% "better-monadic-for" % "0.2.2"),
   addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.7" cross CrossVersion.binary),
 
   libraryDependencies ++= Seq(
