@@ -39,7 +39,7 @@ val doobieV = "0.5.1"
 val pureConfigV = "0.9.1"
 val refinedV = "0.8.7"
 
-val specs2V = "4.0.3"
+val specs2V = "4.0.4"
 val disciplineV = "0.10.0"
 val scShapelessV = "1.1.6"
 
