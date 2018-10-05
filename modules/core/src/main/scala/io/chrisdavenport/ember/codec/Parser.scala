@@ -5,7 +5,6 @@ import cats.implicits._
 import io.chrisdavenport.ember
 import fs2._
 import scodec.bits.ByteVector
-import fs2.interop.scodec.ByteVectorChunk
 import org.http4s._
 import cats.effect._
 import Shared._
@@ -17,23 +16,23 @@ object Parser {
     /**
     * From the stream of bytes this extracts Http Header and body part.
     */
-  def httpHeaderAndBody[F[_]](maxHeaderSize: Int): Pipe[F, Byte, (ByteVector, Stream[F, Byte])] = {
+  def httpHeaderAndBody[F[_]: ApplicativeError[?[_], Throwable]](maxHeaderSize: Int): Pipe[F, Byte, (ByteVector, Stream[F, Byte])] = {
     def go(buff: ByteVector, in: Stream[F, Byte]): Pull[F, (ByteVector, Stream[F, Byte]), Unit] = {
-      in.pull.unconsChunk flatMap {
+      in.pull.uncons flatMap {
         case None =>
-          Pull.raiseError(new Throwable(s"Incomplete Header received (sz = ${buff.size}): ${buff.decodeUtf8}"))
+          Pull.raiseError[F](new Throwable(s"Incomplete Header received (sz = ${buff.size}): ${buff.decodeUtf8}"))
         case Some((chunk, tl)) =>
           val bv = chunk2ByteVector(chunk)
           val all = buff ++ bv
           val idx = all.indexOfSlice(`\r\n\r\n`)
           if (idx < 0) {
-            if (all.size > maxHeaderSize) Pull.raiseError(new Throwable(s"Size of the header exceeded the limit of $maxHeaderSize (${all.size})"))
+            if (all.size > maxHeaderSize) Pull.raiseError[F](new Throwable(s"Size of the header exceeded the limit of $maxHeaderSize (${all.size})"))
             else go(all, tl)
           }
           else {
             val (h, t) = all.splitAt(idx)
-            if (h.size > maxHeaderSize)  Pull.raiseError(new Throwable(s"Size of the header exceeded the limit of $maxHeaderSize (${all.size})"))
-            else  Pull.output1((h, Stream.chunk(ByteVectorChunk(t.drop(`\r\n\r\n`.size))) ++ tl))
+            if (h.size > maxHeaderSize)  Pull.raiseError[F](new Throwable(s"Size of the header exceeded the limit of $maxHeaderSize (${all.size})"))
+            else  Pull.output1((h, Stream.chunk(Chunk.ByteVectorChunk(t.drop(`\r\n\r\n`.size))) ++ tl))
 
           }
       }

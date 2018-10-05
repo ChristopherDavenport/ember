@@ -5,7 +5,6 @@ import fs2._
 import org.http4s._
 import cats._
 import cats.implicits._
-import fs2.interop.scodec.ByteVectorChunk
 import Shared._
 
 object Encoder {
@@ -21,7 +20,7 @@ object Encoder {
       .fold(resp.body)(_ => resp.body.through(ChunkedEncoding.encode[F]))
 
     initSection.covary[F].intersperse("\r\n").through(text.utf8Encode) ++ 
-    Stream.chunk(ByteVectorChunk(`\r\n\r\n`)) ++
+    Stream.chunk(Chunk.ByteVectorChunk(`\r\n\r\n`)) ++
     resp.body
   }
 

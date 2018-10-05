@@ -13,9 +13,9 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.circe._
 import _root_.io.circe._
 
-object Example extends StreamApp[IO]{
+object Example extends IOApp{
 
-  def stream(args: List[String], requestShutdown: IO[Unit]) : Stream[IO, StreamApp.ExitCode] = {
+  def run(args: List[String]) : IO[ExitCode] = {
     val address = "0.0.0.0"
     val port = 8080
     val inetAddress = new InetSocketAddress(address, port)
@@ -30,8 +30,7 @@ object Example extends StreamApp[IO]{
     val requestHeaderReceiveTimeout: Duration = 5.seconds
 
     for {
-      sched <- Scheduler[IO](5)
-      terminatedSignal <- Stream.eval(async.signalOf[IO, Boolean](false)(Effect[IO], appEC))
+      terminatedSignal <- Stream.eval(fs2.concurrent.SignallingRef[IO, Boolean](false))
       exitCode <- _root_.io.chrisdavenport.ember.server[IO](
         maxConcurrency,
         receiveBufferSize,
@@ -47,7 +46,7 @@ object Example extends StreamApp[IO]{
         terminatedSignal
       )
     } yield exitCode
-  }
+  }.compile.drain.as(ExitCode.Success)
 
   def service[F[_]: Sync] : HttpService[F] = {
     val dsl = new Http4sDsl[F]{}

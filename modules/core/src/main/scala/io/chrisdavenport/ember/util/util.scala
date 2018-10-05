@@ -5,7 +5,6 @@ import cats.effect._
 import cats.implicits._
 import fs2._
 import fs2.io.tcp.Socket
-import fs2.interop.scodec.ByteVectorChunk
 import scodec.bits.ByteVector
 import scala.concurrent.duration._
 import scala.annotation.tailrec
@@ -39,7 +38,7 @@ package object util {
       Stream.eval(shallTimeout).flatMap { shallTimeout =>
         if (!shallTimeout) socket.reads(chunkSize, None)
         else {
-          if (remains <= 0.millis) Stream.raiseError(new Exception("Timeout!"))
+          if (remains <= 0.millis) Stream.raiseError[F](new Exception("Timeout!"))
           else {
             Stream.eval(F.delay(System.currentTimeMillis())).flatMap { start =>
             Stream.eval(socket.read(chunkSize, Some(remains))).flatMap { read =>
