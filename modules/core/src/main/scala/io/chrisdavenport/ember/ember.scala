@@ -2,6 +2,7 @@ package io.chrisdavenport
 
 
 import fs2._
+import fs2.concurrent._
 import fs2.io.tcp
 import cats.effect._
 import cats.implicits._
@@ -17,7 +18,7 @@ package object ember {
 
   private val logger = org.log4s.getLogger
 
-  def server[F[_]: Effect](
+  def server[F[_]: ConcurrentEffect](
     maxConcurrency: Int = Int.MaxValue,
     receiveBufferSize: Int = 256 * 1024,
     maxHeaderSize: Int = 10 *1024,
@@ -29,7 +30,7 @@ package object ember {
     onWriteFailure : (Option[Request[F]], Response[F], Throwable) => Stream[F, Nothing],
     ec: ExecutionContext,
     ag: AsynchronousChannelGroup,
-    terminationSignal: async.immutable.Signal[F, Boolean]
+    terminationSignal: fs2.concurrent.Signal[F, Boolean]
   ): Stream[F, Nothing] = {
     implicit val AG = ag
     implicit val EC = ec
@@ -39,9 +40,9 @@ package object ember {
     }
 
     tcp.server[F](bindAddress)
-      .map(_.flatMap(
+      .map(connect => Stream.resource(connect).flatMap(
         socket =>
-          Stream.eval(async.signalOf[F, Boolean](initial)).flatMap{ 
+          Stream.eval(SignallingRef[F, Boolean](initial)).flatMap{ 
             timeoutSignal =>  
               readWithTimeout[F](socket, readDuration, timeoutSignal.get, receiveBufferSize)
               .through(Parser.Req.parser(maxHeaderSize))
@@ -76,7 +77,7 @@ package object ember {
                 }
               }.drain
           }
-        )).join(maxConcurrency)
+        )).parJoin(maxConcurrency)
           .interruptWhen(terminationSignal)
           .drain
   }

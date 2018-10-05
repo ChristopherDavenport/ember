@@ -2,7 +2,6 @@ package io.chrisdavenport.ember.codec
 
 import fs2._
 import scodec.bits.ByteVector
-import fs2.interop.scodec.ByteVectorChunk
 import org.http4s.HttpVersion
 
 object Shared {
@@ -14,7 +13,7 @@ object Shared {
 
   def chunk2ByteVector(chunk: Chunk[Byte]):ByteVector = {
     chunk match  {
-      case bv: ByteVectorChunk => bv.toByteVector
+      case bv: Chunk.ByteVectorChunk => bv.toByteVector
       case other =>
         val bs = other.toBytes
         ByteVector(bs.values, bs.offset, bs.size)
