@@ -24,8 +24,7 @@ object Encoder {
     resp.body
   }
 
-  def httpServiceToPipe[F[_]: Sync](h: HttpService[F], onMissing: Response[F]): Pipe[F, Request[F], Response[F]] = _.evalMap{req => 
-    h(req).value.map(_.fold(onMissing)(identity))
-  }
+  def httpAppToPipe[F[_]: Sync](h: HttpApp[F]): Pipe[F, Request[F], Response[F]] = 
+  _.evalMap(h.run)
 
 }
