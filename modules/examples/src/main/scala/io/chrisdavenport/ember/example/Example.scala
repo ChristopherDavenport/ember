@@ -13,47 +13,32 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.circe._
 import _root_.io.circe._
 
-object Example extends StreamApp[IO]{
+object Example extends IOApp{
 
-  def stream(args: List[String], requestShutdown: IO[Unit]) : Stream[IO, StreamApp.ExitCode] = {
+  def run(args: List[String]) : IO[ExitCode] = {
     val address = "0.0.0.0"
     val port = 8080
     val inetAddress = new InetSocketAddress(address, port)
-    
-    val appEC = ExecutionContext.global
     val acg = AsynchronousChannelGroup.withFixedThreadPool(100, Executors.defaultThreadFactory)
-    
-    // Defaults
-    val maxConcurrency: Int = Int.MaxValue
-    val receiveBufferSize: Int = 256 * 1024
-    val maxHeaderSize: Int = 10 *1024
-    val requestHeaderReceiveTimeout: Duration = 5.seconds
 
     for {
-      sched <- Scheduler[IO](5)
-      terminatedSignal <- Stream.eval(async.signalOf[IO, Boolean](false)(Effect[IO], appEC))
+      terminatedSignal <- Stream.eval(fs2.concurrent.SignallingRef[IO, Boolean](false))
       exitCode <- _root_.io.chrisdavenport.ember.server[IO](
-        maxConcurrency,
-        receiveBufferSize,
-        maxHeaderSize,
-        requestHeaderReceiveTimeout,
         inetAddress,
         service[IO],
-        Response[IO](Status.NotFound),
         _ => Stream(Response[IO](Status.InternalServerError)),
         (_,_, _) => Stream.empty,
-        appEC,
         acg,
         terminatedSignal
       )
     } yield exitCode
-  }
+  }.compile.drain.as(ExitCode.Success)
 
-  def service[F[_]: Sync] : HttpService[F] = {
+  def service[F[_]: Sync] : HttpApp[F] = {
     val dsl = new Http4sDsl[F]{}
     import dsl._
     
-    HttpService[F]{
+    HttpRoutes.of[F]{
       case req @ POST -> Root  => 
         for {
           json <- req.decodeJson[Json]
@@ -70,6 +55,6 @@ object Example extends StreamApp[IO]{
           .take(100)
           .through(fs2.text.utf8Encode[F])
         Ok(body).withContentType(org.http4s.headers.`Content-Type`(org.http4s.MediaType.`text/plain`))
-    }
+    }.orNotFound
   }
 }

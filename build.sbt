@@ -1,5 +1,6 @@
-lazy val ember = project.in(file("."))
+lazy val root = project.in(file("."))
   .aggregate(core, examples)
+  .settings(commonSettings)
   .settings(noPublish)
 
 lazy val core = project.in(file("modules/core"))
@@ -26,20 +27,14 @@ lazy val examples = project.in(file("modules/examples"))
     )
   )
 
-val catsV = "1.1.0"
-val kittensV = "1.0.0-RC3"
-val catsEffectV = "0.10"
-val mouseV = "0.16"
-val shapelessV = "2.3.2"
-val fs2V = "0.10.3"
-val http4sV = "0.18.5"
-val circeV = "0.9.2"
-val doobieV = "0.5.1"
-val pureConfigV = "0.9.1"
-val refinedV = "0.8.7"
+val catsV = "1.4.0"
+val catsEffectV = "1.0.0"
+val fs2V = "1.0.0"
+val http4sV = "0.19.0-M4"
+val circeV = "0.10.0"
 
-val specs2V = "4.0.3"
-val disciplineV = "0.8"
+val specs2V = "4.3.4"
+val disciplineV = "0.10.0"
 val scShapelessV = "1.1.6"
 
 val logbackClassicV = "1.2.3"
@@ -52,28 +47,25 @@ lazy val contributors = Seq(
 lazy val commonSettings = Seq(
   organization := "io.chrisdavenport",
 
-  scalaVersion := "2.12.4",
+  scalaVersion := "2.12.7",
   crossScalaVersions := Seq(scalaVersion.value, "2.11.12"),
-  resolvers += "JitPack" at "https://jitpack.io",
+  scalacOptions += "-Yrangepos",
 
-  addCompilerPlugin("com.github.oleg-py" %% "better-monadic-for" % "0.1.0"),
-  addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.6" cross CrossVersion.binary),
+  addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
+  addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.8" cross CrossVersion.binary),
 
   libraryDependencies ++= Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
-    "co.fs2"                      %% "fs2-core"                   % fs2V,
     "co.fs2"                      %% "fs2-io"                     % fs2V,
-    "co.fs2"                      %% "fs2-scodec"                 % fs2V,
     "org.http4s"                  %% "http4s-core"              % http4sV,
-    // "org.http4s"                  %% "http4s-blaze-client"        % http4sV,
 
     "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
     "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test,
     "org.typelevel"               %% "discipline"                 % disciplineV   % Test,
     "com.github.alexarchambault"  %% "scalacheck-shapeless_1.13"  % scShapelessV  % Test
   )
-)
+) ++ releaseSettings
 
 lazy val releaseSettings = {
   import ReleaseTransformations._
