@@ -54,7 +54,7 @@ object Example extends IOApp{
           .repeat
           .take(100)
           .through(fs2.text.utf8Encode[F])
-        Ok(body).withContentType(org.http4s.headers.`Content-Type`(org.http4s.MediaType.`text/plain`))
+        Ok(body).withContentType(org.http4s.headers.`Content-Type`(org.http4s.MediaType.text.plain))
     }.orNotFound
   }
 }
