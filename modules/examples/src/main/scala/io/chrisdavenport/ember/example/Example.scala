@@ -48,7 +48,13 @@ object Example extends IOApp{
         Ok(Json.obj("root" -> Json.fromString("GET")))
       case GET -> Root / "hello" / name => 
         Ok(show"Hi $name!")
+      case GET -> Root / "chunked" =>
+        val body = Stream("This IS A CHUNK\n")
+          .covary[F]
+          .repeat
+          .take(100)
+          .through(fs2.text.utf8Encode[F])
+        Ok(body).withContentType(org.http4s.headers.`Content-Type`(org.http4s.MediaType.text.plain))
     }.orNotFound
   }
-
 }
