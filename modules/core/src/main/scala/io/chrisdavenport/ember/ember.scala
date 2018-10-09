@@ -4,8 +4,11 @@ package io.chrisdavenport
 import fs2._
 import fs2.concurrent._
 import fs2.io.tcp
+import cats._
 import cats.effect._
 import cats.implicits._
+import java.util.concurrent.Executors
+import javax.net.ssl.SSLContext
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import java.net.InetSocketAddress
@@ -81,9 +84,11 @@ package object ember {
   }
 
 
-  def request[F[_]: ConcurrentEffect](
+  def request[F[_]: ConcurrentEffect: ContextShift](
     request: Request[F]
     , acg: AsynchronousChannelGroup
+    , sslExecutionContext: => ExecutionContext
+    , sslContext : => SSLContext = { val ctx = SSLContext.getInstance("TLS"); ctx.init(null,null,null); ctx }
     , chunkSize: Int = 32*1024
     , maxResponseHeaderSize: Int = 4096
     , timeout: Duration = 5.seconds
@@ -91,6 +96,10 @@ package object ember {
     implicit val ACG : AsynchronousChannelGroup = acg
     Stream.eval(codec.Shared.addressForRequest(request))
     .flatMap {address => Stream.resource(io.tcp.client[F](address))}
+    .evalMap { socket =>
+          if (request.uri.scheme.exists(_ === Uri.Scheme.https)) util.liftToSecure[F](sslExecutionContext, sslContext)(socket, true)
+          else Applicative[F].pure(socket)
+    }
     .flatMap{socket => 
       timeout match {
         case fin: FiniteDuration =>
@@ -110,7 +119,7 @@ package object ember {
             socket.reads(chunkSize, None) through Parser.Resp.parser[F](maxResponseHeaderSize)
           }
       }
-}
+  }
 
   }
 

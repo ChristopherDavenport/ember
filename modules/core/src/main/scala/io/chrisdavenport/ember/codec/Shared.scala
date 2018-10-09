@@ -30,7 +30,7 @@ object Shared {
       host <- req.uri.host.toRight(new Throwable("Missing Host")).liftTo[F]
       socketAddress <- addressForComponents(scheme, host, req.uri.port)
     } yield socketAddress
-    
+
   def addressForComponents[F[_] : Sync](scheme: Uri.Scheme, host: Uri.Host, port: Option[Int]): F[InetSocketAddress] = Sync[F].delay {
     val finalPort = port.getOrElse {
       scheme match {
