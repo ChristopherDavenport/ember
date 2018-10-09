@@ -5,12 +5,15 @@ import fs2._
 import fs2.concurrent._
 import fs2.io.tcp
 import fs2.io.tcp._
+import cats._
 import cats.effect._
 import cats.implicits._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousChannelGroup
+import java.util.concurrent.Executors
+import javax.net.ssl.SSLContext
 import org.http4s._
 import _root_.io.chrisdavenport.ember.codec.{Encoder, Parser}
 import _root_.io.chrisdavenport.ember.util.readWithTimeout
@@ -105,9 +108,11 @@ package object ember {
   }
 
 
-  def request[F[_]: ConcurrentEffect](
+  def request[F[_]: ConcurrentEffect: ContextShift](
     request: Request[F]
     , acg: AsynchronousChannelGroup
+    , sslExecutionContext: ExecutionContext
+    , sslContext : SSLContext = { val ctx = SSLContext.getInstance("TLS"); ctx.init(null,null,null); ctx } 
     , chunkSize: Int = 32*1024
     , maxResponseHeaderSize: Int = 4096
     , timeout: Duration = 5.seconds
@@ -134,6 +139,7 @@ package object ember {
         .onFinalize(socket.endOfOutput)
         .compile
         .drain
+      _ <- Sync[F].delay(println("Finished Writing Request"))
       timeoutSignal <- SignallingRef[F, Boolean](true)
       sent <- C.realTime(MILLISECONDS)
       remains = fin - (sent - start).millis
@@ -146,8 +152,12 @@ package object ember {
     } yield resp
 
     for {
-      socket <- Resource.liftF(codec.Shared.addressForRequest(request))
+      initSocket <- Resource.liftF(codec.Shared.addressForRequest(request))
         .flatMap(io.tcp.client[F](_))
+      socket <- Resource.liftF{
+        if (request.uri.scheme.exists(_ === Uri.Scheme.https)) util.liftToSecure[F](sslExecutionContext, sslContext)(initSocket, true)
+        else Applicative[F].pure(initSocket)
+      }
       resp <- timeout match {
         case t: FiniteDuration => Resource.liftF(onTimeout(socket, t))
         case _ => Resource.liftF(onNoTimeout(socket))

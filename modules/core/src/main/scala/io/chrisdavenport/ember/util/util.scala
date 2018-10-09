@@ -14,6 +14,9 @@ import org.http4s.Response
 import org.http4s._
 import codec.Shared._
 import scala.concurrent.duration.MILLISECONDS
+import javax.net.ssl.SSLContext
+import spinoco.fs2.crypto.io.tcp.TLSSocket
+import scala.concurrent.ExecutionContext
 
 package object util {
     /**
@@ -61,5 +64,13 @@ package object util {
     go(timeout)
   }
 
+  /** creates a function that lifts supplied socket to secure socket **/
+  def liftToSecure[F[_] : Concurrent : ContextShift](sslES: => ExecutionContext, sslContext: => SSLContext)(socket: Socket[F], clientMode: Boolean): F[Socket[F]] = {
+    Sync[F].delay {
+      val engine = sslContext.createSSLEngine()
+      engine.setUseClientMode(clientMode)
+      engine
+    }.flatMap(TLSSocket.instance[F](socket, _, sslES).widen)
+  }
 
 }

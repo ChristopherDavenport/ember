@@ -20,8 +20,9 @@ object ClientExample extends IOApp{
     for {
       acg <- Stream.bracket(Sync[IO].delay(AsynchronousChannelGroup.withFixedThreadPool(100, Executors.defaultThreadFactory)))(acg => Sync[IO].delay(acg.shutdown))
       resp <- Stream.resource(_root_.io.chrisdavenport.ember.request[IO](
-        Request[IO](Method.GET, Uri.unsafeFromString("http://christopherdavenport.github.io/")),
-        acg
+        Request[IO](Method.GET, Uri.unsafeFromString("https://icanhazdadjoke.com/")),
+        acg,
+        ExecutionContext.global
       ))
       _ <- Stream.eval(Sync[IO].delay(println(s"Response - $resp")))
       bodyText <- Stream.eval(resp.bodyAsText.compile.foldMonoid)
