@@ -35,7 +35,8 @@ class EncoderSpec extends Specification {
     "encode a no body request correctly" in {
       val req = Request[IO](Method.GET, Uri.unsafeFromString("http://www.google.com"))
       val expected = 
-      """GET http://www.google.com HTTP/1.1
+      """GET  HTTP/1.1
+      |Host: www.google.com
       |
       |""".stripMargin
 
@@ -46,9 +47,10 @@ class EncoderSpec extends Specification {
       val req = Request[IO](Method.POST, Uri.unsafeFromString("http://www.google.com"))
         .withEntity("Hello World!")
       val expected = 
-      """POST http://www.google.com HTTP/1.1
+      """POST  HTTP/1.1
       |Content-Length: 12
       |Content-Type: text/plain; charset=UTF-8
+      |Host: www.google.com
       |
       |Hello World!""".stripMargin
 
