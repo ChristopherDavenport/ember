@@ -77,7 +77,7 @@ object Parser {
       _.through(httpHeaderAndBody[F](maxHeaderLength))
         .evalMap{case (bv, body) => headerBlobByteVectorToRequest[F](bv, body, maxHeaderLength)}
 
-    def headerBlobByteVectorToRequest[F[_]: MonadError[?[_], Throwable]](b: ByteVector, s: Stream[F, Byte], maxHeaderLength: Int): F[Request[F]] = 
+    private def headerBlobByteVectorToRequest[F[_]: MonadError[?[_], Throwable]](b: ByteVector, s: Stream[F, Byte], maxHeaderLength: Int): F[Request[F]] = 
       for {
 
         (methodHttpUri, headersBV) <- splitHeader(b).fold(
@@ -102,15 +102,15 @@ object Parser {
           body = body
         )
 
-    def bvToRequestTopLine[F[_]: MonadError[?[_], Throwable]](b: ByteVector): F[(Method, Uri, HttpVersion)] = for {
+    private def bvToRequestTopLine[F[_]: MonadError[?[_], Throwable]](b: ByteVector): F[(Method, Uri, HttpVersion)] = for {
       (method, rest) <- getMethodEmitRest[F](b)
       (uri, httpVString) <- getUriEmitHttpVersion[F](rest)
-      httpVersion = getHttpVersion(httpVString)
+      httpVersion <- HttpVersion.fromString(httpVString).liftTo[F]
       
     } yield (method, uri, httpVersion)
 
 
-    def getMethodEmitRest[F[_]: ApplicativeError[?[_], Throwable]](b: ByteVector): F[(Method, String)] = {
+    private def getMethodEmitRest[F[_]: ApplicativeError[?[_], Throwable]](b: ByteVector): F[(Method, String)] = {
       val opt = for {
         line <- b.decodeAscii.right.toOption
         idx <- Some(line indexOf ' ')
@@ -123,7 +123,7 @@ object Parser {
         )(ApplicativeError[F, Throwable].pure(_))
     }
 
-    def getUriEmitHttpVersion[F[_]: ApplicativeError[?[_], Throwable]](s: String): F[(Uri, String)] = {
+    private def getUriEmitHttpVersion[F[_]: ApplicativeError[?[_], Throwable]](s: String): F[(Uri, String)] = {
       val opt = for {
         idx <- Some(s indexOf ' ')
         if (idx >= 0)
@@ -134,6 +134,82 @@ object Parser {
         ApplicativeError[F, Throwable].raiseError[(Uri, String)](new Throwable("Missing URI"))
       )(ApplicativeError[F, Throwable].pure(_))
     }
+  }
+
+  object Resp {
+
+    def parser[F[_]: MonadError[?[_], Throwable]](maxHeaderLength: Int): Pipe[F, Byte, Response[F]] =
+      _.through(httpHeaderAndBody[F](maxHeaderLength))
+        .evalMap{case (bv, body) => headerBlobByteVectorToResponse[F](bv, body, maxHeaderLength)}
+
+    private def headerBlobByteVectorToResponse[F[_]: MonadError[?[_], Throwable]](b: ByteVector, s: Stream[F, Byte], maxHeaderLength: Int): F[Response[F]] = 
+      for {
+
+        (methodHttpUri, headersBV) <- splitHeader(b).fold(
+          ApplicativeError[F, Throwable].raiseError[(ByteVector, ByteVector)](new Throwable("Invalid Empty Init Line"))
+        )(Applicative[F].pure(_))
+        headers = generateHeaders(headersBV)(Headers.empty)
+        (httpV, status) <- bvToResponseTopLine[F](methodHttpUri)
+        
+        contentLength = headers.get(org.http4s.headers.`Content-Length`).map(_.length).getOrElse(0L)
+        isChunked = headers.get(org.http4s.headers.`Transfer-Encoding`).exists(_.value.toList.contains(TransferCoding.chunked))
+
+        body = Alternative[Option].guard(isChunked).fold(
+          s.take(contentLength)
+        )(_ => s.through(ChunkedEncoding.decode(maxHeaderLength)))
+
+        
+      } yield Response[F](
+          status = status,
+          httpVersion = httpV,
+          headers = headers,
+          body = body
+        )
+
+    private def bvToResponseTopLine[F[_]: MonadError[?[_], Throwable]](
+      b: ByteVector
+    ): F[(HttpVersion, Status)] = {
+      // Status-Line = HTTP-Version SP Status-Code SP Reason-Phrase CRLF
+      for {
+        (httpV, restS) <- getHttpVersionEmitRest[F](b)
+        status <- getStatus[F](restS)
+      } yield (httpV, status)
+    }
+
+    private def getHttpVersionEmitRest[F[_]: MonadError[?[_], Throwable]](
+      b: ByteVector
+    ): F[(HttpVersion, String)] = {
+      val opt = for {
+        line <- b.decodeAscii.right.toOption
+        idx <- Some(line indexOf ' ')
+        if (idx >= 0)
+      } yield (line.substring(0, idx), line.substring(idx + 1))
+
+      for {
+      (httpS, rest) <- opt.fold(
+        ApplicativeError[F, Throwable].raiseError[(String, String)](new Throwable("Missing HttpVersion"))
+        )(Applicative[F].pure(_))
+      httpV <- HttpVersion.fromString(httpS).liftTo[F]
+      } yield (httpV, rest)
+    }
+  
+    private def getStatus[F[_]: MonadError[?[_], Throwable]](s: String): F[Status] = {
+      def getFirstWord(text: String): String = {
+        val index = text.indexOf(' ')
+        if (index >= 0) {
+          text.substring(0, index)
+        } else text
+      }
+      for {
+        word <- Either.catchNonFatal(getFirstWord(s)).liftTo[F]
+        code <- Either.catchNonFatal(word.toInt).liftTo[F]
+        status <- Status.fromInt(code).liftTo[F]
+      } yield status
+    }
+
+
+
+    
   }
 
 }
