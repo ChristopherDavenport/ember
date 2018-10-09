@@ -71,7 +71,7 @@ object Parser {
     }
   }
 
-  object Req{
+  object Request {
 
     def parser[F[_]: MonadError[?[_], Throwable]](maxHeaderLength: Int): Pipe[F, Byte, Request[F]] =
       _.through(httpHeaderAndBody[F](maxHeaderLength))
@@ -94,7 +94,7 @@ object Parser {
         )(_ => s.through(ChunkedEncoding.decode(maxHeaderLength)))
 
         
-      } yield Request[F](
+      } yield org.http4s.Request[F](
           method = method,
           uri = uri,
           httpVersion = http,
@@ -136,7 +136,7 @@ object Parser {
     }
   }
 
-  object Resp {
+  object Response {
 
     def parser[F[_]: MonadError[?[_], Throwable]](maxHeaderLength: Int): Pipe[F, Byte, Response[F]] =
       _.through(httpHeaderAndBody[F](maxHeaderLength))
@@ -159,7 +159,7 @@ object Parser {
         )(_ => s.through(ChunkedEncoding.decode(maxHeaderLength)))
 
         
-      } yield Response[F](
+      } yield org.http4s.Response[F](
           status = status,
           httpVersion = httpV,
           headers = headers,

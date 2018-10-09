@@ -22,15 +22,11 @@ object Example extends IOApp{
     val acg = AsynchronousChannelGroup.withFixedThreadPool(100, Executors.defaultThreadFactory)
 
     for {
-      terminatedSignal <- Stream.eval(fs2.concurrent.SignallingRef[IO, Boolean](false))
       exitCode <- _root_.io.chrisdavenport.ember.server[IO](
         inetAddress,
         service[IO],
-        _ => Response[IO](Status.InternalServerError),
-        (_,_, _) => IO.unit,
-        acg,
-        terminatedSignal
-      )
+        acg
+      ).concurrently(Stream.eval(IO.delay(println("Server Has Started"))))
     } yield exitCode
   }.compile.drain.as(ExitCode.Success)
 
