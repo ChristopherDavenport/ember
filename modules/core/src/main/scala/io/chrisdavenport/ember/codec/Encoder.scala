@@ -27,7 +27,7 @@ object Encoder {
   def reqToBytes[F[_]: Sync](req: Request[F]): Stream[F, Byte] = {
     // Request-Line   = Method SP Request-URI SP HTTP-Version CRLF
     val requestLine = show"${req.method} ${req.uri.renderString} ${req.httpVersion}"
-    
+
     val headerStrings : List[String] = req.headers.map(h => h.name + ": " + h.value).toList
 
     val initSection = Stream(requestLine) ++ Stream.emits(headerStrings)
