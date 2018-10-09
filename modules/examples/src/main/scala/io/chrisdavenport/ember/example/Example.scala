@@ -22,7 +22,7 @@ object Example extends IOApp{
     val acg = AsynchronousChannelGroup.withFixedThreadPool(100, Executors.defaultThreadFactory)
 
     for {
-      exitCode <- _root_.io.chrisdavenport.ember.server[IO](
+      exitCode <- _root_.io.chrisdavenport.ember.core.server[IO](
         inetAddress,
         service[IO],
         acg

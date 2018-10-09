@@ -1,4 +1,4 @@
-package io.chrisdavenport.ember.codec
+package io.chrisdavenport.ember.core
 
 import cats.ApplicativeError
 import fs2._
@@ -6,7 +6,6 @@ import scodec.bits.ByteVector
 import Shared._
 
 object ChunkedEncoding {
-
 
   /** From fs2-http
     * decodes from the HTTP chunked encoding. After last chunk this terminates. Allows to specify max header size, after which this terminates

@@ -1,4 +1,4 @@
-package io.chrisdavenport.ember
+package io.chrisdavenport.ember.core
 
 import cats._
 import cats.effect._
@@ -12,10 +12,10 @@ import org.http4s.Request
 import org.http4s.Method
 import org.http4s.Response
 import org.http4s._
-import codec.Shared._
+import Shared._
 import scala.concurrent.duration.MILLISECONDS
 
-package object util {
+package object Util {
     /**
    * The issue with a normal http body is that there is no termination character, 
    * thus unless you have content-length and the client still has their input side open, 

@@ -1,5 +1,4 @@
-package io.chrisdavenport
-
+package io.chrisdavenport.ember
 
 import fs2._
 import fs2.concurrent._
@@ -12,10 +11,10 @@ import scala.concurrent.duration._
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousChannelGroup
 import org.http4s._
-import _root_.io.chrisdavenport.ember.codec.{Encoder, Parser}
-import _root_.io.chrisdavenport.ember.util.readWithTimeout
+import _root_.io.chrisdavenport.ember.core.{Encoder, Parser}
+import _root_.io.chrisdavenport.ember.core.Util.readWithTimeout
 
-package object ember {
+package object core {
 
   private val logger = org.log4s.getLogger
 
@@ -146,7 +145,7 @@ package object ember {
     } yield resp
 
     for {
-      socket <- Resource.liftF(codec.Shared.addressForRequest(request))
+      socket <- Resource.liftF(Shared.addressForRequest(request))
         .flatMap(io.tcp.client[F](_))
       resp <- timeout match {
         case t: FiniteDuration => Resource.liftF(onTimeout(socket, t))
