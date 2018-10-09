@@ -80,4 +80,38 @@ package object ember {
           .drain
   }
 
+
+  def request[F[_]: ConcurrentEffect](
+    request: Request[F]
+    , chunkSize: Int = 32*1024
+    , maxResponseHeaderSize: Int = 4096
+    , timeout: Duration = 5.seconds
+    , acg: AsynchronousChannelGroup
+  ): Stream[F, Response[F]] = {
+    implicit val ACG : AsynchronousChannelGroup = acg
+    Stream.eval(codec.Shared.addressForRequest(request))
+    .flatMap {address => Stream.resource(io.tcp.client[F](address))}
+    .flatMap{socket => 
+      timeout match {
+        case fin: FiniteDuration =>
+          Stream.eval(Sync[F].delay(System.currentTimeMillis())).flatMap { start =>
+          Encoder.reqToBytes(request).to(socket.writes(Some(fin))).last.onFinalize(socket.endOfOutput).flatMap { _ =>
+          Stream.eval(fs2.concurrent.SignallingRef[F, Boolean](true)).flatMap { timeoutSignal =>
+          Stream.eval(Sync[F].delay(System.currentTimeMillis())).flatMap { sent =>
+            val remains = fin - (sent - start).millis
+            readWithTimeout(socket, remains, timeoutSignal.get, chunkSize)
+            .through (Parser.Resp.parser[F](maxResponseHeaderSize))
+            .flatMap { response =>
+              Stream.eval_(timeoutSignal.set(false)) ++ Stream.emit(response)
+            }
+          }}}}
+        case _ =>
+          Encoder.reqToBytes(request).to(socket.writes(None)).last.onFinalize(socket.endOfOutput).flatMap { _ =>
+            socket.reads(chunkSize, None) through Parser.Resp.parser[F](maxResponseHeaderSize)
+          }
+      }
+}
+
+  }
+
 }
