@@ -83,10 +83,10 @@ package object ember {
 
   def request[F[_]: ConcurrentEffect](
     request: Request[F]
+    , acg: AsynchronousChannelGroup
     , chunkSize: Int = 32*1024
     , maxResponseHeaderSize: Int = 4096
     , timeout: Duration = 5.seconds
-    , acg: AsynchronousChannelGroup
   ): Stream[F, Response[F]] = {
     implicit val ACG : AsynchronousChannelGroup = acg
     Stream.eval(codec.Shared.addressForRequest(request))
