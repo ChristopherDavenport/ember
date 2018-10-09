@@ -19,12 +19,4 @@ object Shared {
         ByteVector(bs.values, bs.offset, bs.size)
     }
   }
-
-
-  def getHttpVersion(s: String): HttpVersion = {
-    val _ = s
-    HttpVersion(1,2)
-  }
-
-
 }
