@@ -27,7 +27,7 @@ object Example extends IOApp{
         service[IO],
         _ => Response[IO](Status.InternalServerError),
         (_,_, _) => IO.unit,
-        acg,
+        acg
       ).concurrently(Stream.eval(IO.delay(println("Server Has Started"))))
     } yield exitCode
   }.compile.drain.as(ExitCode.Success)
