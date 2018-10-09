@@ -26,7 +26,7 @@ object Example extends IOApp{
       exitCode <- _root_.io.chrisdavenport.ember.server[IO](
         inetAddress,
         service[IO],
-        _ => Stream(Response[IO](Status.InternalServerError)),
+        _ => Response[IO](Status.InternalServerError).pure[IO],
         (_,_, _) => Stream.empty,
         acg,
         terminatedSignal

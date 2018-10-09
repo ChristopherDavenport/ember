@@ -24,9 +24,6 @@ object Encoder {
     body
   }
 
-  def respToBytesPipe[F[_]: Sync]: Pipe[F, Response[F], Byte] = 
-    _.flatMap(respToBytes[F])
-
   def reqToBytes[F[_]: Sync](req: Request[F]): Stream[F, Byte] = {
     // Request-Line   = Method SP Request-URI SP HTTP-Version CRLF
     val requestLine = show"${req.method} ${req.uri.renderString} ${req.httpVersion}"
@@ -42,10 +39,4 @@ object Encoder {
     Stream.chunk(Chunk.ByteVectorChunk(`\r\n\r\n`)) ++
     body
   }
-
-  def reqToBytesPipe[F[_]: Sync]: Pipe[F, Request[F], Byte] = 
-    _.flatMap(reqToBytes[F])
-
-  def httpAppToPipe[F[_]: Sync](h: HttpApp[F]): Pipe[F, Request[F], Response[F]] = 
-    _.evalMap(h.run)
 }
