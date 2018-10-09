@@ -17,7 +17,6 @@ object ClientExample extends IOApp{
 
   def run(args: List[String]) : IO[ExitCode] = {
 
-
     for {
       acg <- Stream.bracket(Sync[IO].delay(AsynchronousChannelGroup.withFixedThreadPool(100, Executors.defaultThreadFactory)))(acg => Sync[IO].delay(acg.shutdown))
       resp <- Stream.resource(_root_.io.chrisdavenport.ember.request[IO](
