@@ -57,7 +57,7 @@ package object ember {
                 def send(request:Option[Request[F]], resp: Response[F]): F[Unit] = {
                   Stream(resp)
                   .covary[F]
-                  .through(Encoder.respToBytes[F])
+                  .through(Encoder.respToBytesPipe[F])
                   .through(socket.writes())
                   .onFinalize(socket.endOfOutput)
                   .compile
