@@ -26,8 +26,8 @@ object Shared {
   /** evaluates address from the host port and scheme, if this is a custom scheme we will default to port 8080**/
   def addressForRequest[F[_]: Sync](req: Request[F]): F[InetSocketAddress] = 
     for {
-      scheme <- req.uri.scheme.toRight(new Throwable("Missing Scheme")).liftTo[F]
-      host <- req.uri.host.toRight(new Throwable("Missing Host")).liftTo[F]
+      scheme <- req.uri.scheme.toRight(new IllegalArgumentException("Missing Scheme")).liftTo[F]
+      host <- req.uri.host.toRight(new IllegalArgumentException("Missing Host")).liftTo[F]
       socketAddress <- addressForComponents(scheme, host, req.uri.port)
     } yield socketAddress
     
@@ -38,8 +38,8 @@ object Shared {
         case Uri.Scheme.http => 80.some
         case _ => Option.empty[Int]
       }
-    }.toRight(new Throwable("Missing Port"))
+    }.toRight(new IllegalArgumentException("Missing Port"))
     .liftTo[F]
-    .map(InetSocketAddress.createUnresolved(host.value, _))
+    .map(new InetSocketAddress(host.value, _))
   }
 }
