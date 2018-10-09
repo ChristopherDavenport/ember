@@ -1,4 +1,4 @@
-package io.chrisdavenport.ember.codec
+package io.chrisdavenport.ember.core
 
 import org.specs2.mutable.Specification
 import cats.implicits._

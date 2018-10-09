@@ -1,4 +1,4 @@
-package io.chrisdavenport.ember.codec
+package io.chrisdavenport.ember.core
 
 import fs2._
 import scodec.bits.ByteVector
@@ -6,6 +6,7 @@ import cats.effect._
 import cats.implicits._
 import org.http4s._
 import java.net.InetSocketAddress
+
 
 object Shared {
 
@@ -43,3 +44,4 @@ object Shared {
     .map(new InetSocketAddress(host.value, _))
   }
 }
+

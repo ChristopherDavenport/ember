@@ -1,4 +1,4 @@
-package io.chrisdavenport.ember.codec
+package io.chrisdavenport.ember.core
 
 import cats._
 import cats.implicits._
