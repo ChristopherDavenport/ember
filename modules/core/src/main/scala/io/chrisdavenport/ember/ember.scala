@@ -22,10 +22,10 @@ package object ember {
   def server[F[_]: ConcurrentEffect: Clock](
     bindAddress: InetSocketAddress,
     httpApp: HttpApp[F],
-    onError: Throwable => F[Response[F]],
-    onWriteFailure : (Option[Request[F]], Response[F], Throwable) => Stream[F, Nothing],
+    onError: Throwable => Response[F],
+    onWriteFailure : (Option[Request[F]], Response[F], Throwable) => F[Unit],
     ag: AsynchronousChannelGroup,
-    terminationSignal: fs2.concurrent.Signal[F, Boolean],
+    terminationSignal: Signal[F, Boolean],
     // Defaults
     maxConcurrency: Int = Int.MaxValue,
     receiveBufferSize: Int = 256 * 1024,
@@ -62,7 +62,7 @@ package object ember {
             val app: F[(Request[F], Response[F])] = for {
               req <- socketReadRequest(socket, requestHeaderReceiveTimeout, receiveBufferSize)
               resp <- httpApp.run(req)
-                .handleErrorWith(onError)
+                .handleError(onError)
                 .flatTap(resp => Sync[F].delay(logger.debug(s"Response Created $resp")))
             } yield (req, resp)
             def send(request:Option[Request[F]], resp: Response[F]): F[Unit] = {
@@ -75,13 +75,13 @@ package object ember {
                 .drain
                 .attempt
                 .flatMap{
-                  case Left(err) => onWriteFailure(request, resp, err).compile.drain
+                  case Left(err) => onWriteFailure(request, resp, err)
                   case Right(()) => Sync[F].pure(())
                 }
             }
             app.attempt.flatMap{
               case Right((request, response)) => send(Some(request), response)
-              case Left(err) => onError(err).flatMap { send(None, _) }
+              case Left(err) => send(None, onError(err))
             }
           }
         )

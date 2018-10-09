@@ -31,14 +31,15 @@ object Shared {
       socketAddress <- addressForComponents(scheme, host, req.uri.port)
     } yield socketAddress
     
-  def addressForComponents[F[_] : Sync](scheme: Uri.Scheme, host: Uri.Host, port: Option[Int]): F[InetSocketAddress] = Sync[F].delay {
-    val finalPort = port.getOrElse {
+  def addressForComponents[F[_] : Sync](scheme: Uri.Scheme, host: Uri.Host, port: Option[Int]): F[InetSocketAddress] = Sync[F].suspend {
+    port.orElse {
       scheme match {
-        case Uri.Scheme.https => 443
-        case Uri.Scheme.http => 80
-        case _ => 8080
+        case Uri.Scheme.https => 443.some
+        case Uri.Scheme.http => 80.some
+        case _ => Option.empty[Int]
       }
-    }
-    new InetSocketAddress(host.value, finalPort)
+    }.toRight(new Throwable("Missing Port"))
+    .liftTo[F]
+    .map(InetSocketAddress.createUnresolved(host.value, _))
   }
 }
