@@ -9,7 +9,7 @@ import Shared._
 
 object Encoder {
 
-  def respToBytes[F[_]: Sync]: Pipe[F, Response[F], Byte] = _.flatMap{resp: Response[F] =>
+  def respToBytes[F[_]: Sync](resp: Response[F]): Stream[F, Byte] = {
     val statusInstances = new StatusInstances{}
     import statusInstances._
     val headerStrings : List[String] = resp.headers.map(h => h.name + ": " + h.value).toList
@@ -21,10 +21,31 @@ object Encoder {
 
     initSection.covary[F].intersperse("\r\n").through(text.utf8Encode) ++ 
     Stream.chunk(Chunk.ByteVectorChunk(`\r\n\r\n`)) ++
-    resp.body
+    body
   }
 
-  def httpAppToPipe[F[_]: Sync](h: HttpApp[F]): Pipe[F, Request[F], Response[F]] = 
-  _.evalMap(h.run)
+  def respToBytesPipe[F[_]: Sync]: Pipe[F, Response[F], Byte] = 
+    _.flatMap(respToBytes[F])
 
+  def reqToBytes[F[_]: Sync](req: Request[F]): Stream[F, Byte] = {
+    // Request-Line   = Method SP Request-URI SP HTTP-Version CRLF
+    val requestLine = show"${req.method} ${req.uri.renderString} ${req.httpVersion}"
+    
+    val headerStrings : List[String] = req.headers.map(h => h.name + ": " + h.value).toList
+
+    val initSection = Stream(requestLine) ++ Stream.emits(headerStrings)
+
+    val body = Alternative[Option].guard(req.isChunked)
+      .fold(req.body)(_ => req.body.through(ChunkedEncoding.encode[F]))
+
+    initSection.covary[F].intersperse("\r\n").through(text.utf8Encode) ++ 
+    Stream.chunk(Chunk.ByteVectorChunk(`\r\n\r\n`)) ++
+    body
+  }
+
+  def reqToBytesPipe[F[_]: Sync]: Pipe[F, Request[F], Byte] = 
+    _.flatMap(reqToBytes[F])
+
+  def httpAppToPipe[F[_]: Sync](h: HttpApp[F]): Pipe[F, Request[F], Response[F]] = 
+    _.evalMap(h.run)
 }
