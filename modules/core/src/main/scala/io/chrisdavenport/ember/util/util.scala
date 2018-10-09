@@ -46,7 +46,7 @@ package object util {
         out <- read.fold[Stream[F, Byte]](
           Stream.empty
         )(
-          bytes => Stream.chunk(bytes).covary[F] ++ go(remains - (end - start).millis)
+          Stream.chunk(_).covary[F] ++ go(remains - (end - start).millis)
         )
       } yield out
     }
