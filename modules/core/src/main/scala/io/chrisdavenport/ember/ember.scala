@@ -25,9 +25,10 @@ package object ember {
     onWriteFailure : (Option[Request[F]], Response[F], Throwable) => Stream[F, Nothing],
     ag: AsynchronousChannelGroup,
     terminationSignal: fs2.concurrent.Signal[F, Boolean],
+    // Defaults
     maxConcurrency: Int = Int.MaxValue,
     receiveBufferSize: Int = 256 * 1024,
-    maxHeaderSize: Int = 10 *1024,
+    maxHeaderSize: Int = 10 * 1024,
     requestHeaderReceiveTimeout: Duration = 5.seconds
   ): Stream[F, Nothing] = {
     implicit val AG = ag
