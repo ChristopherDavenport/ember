@@ -116,7 +116,7 @@ package object ember {
     , chunkSize: Int = 32*1024
     , maxResponseHeaderSize: Int = 4096
     , timeout: Duration = 5.seconds
-  )(implicit C: Clock[F]): Resource[F, Response[F]] = {
+  )(implicit T: Timer[F]): Resource[F, Response[F]] = {
     implicit val ACG : AsynchronousChannelGroup = acg
 
     def onNoTimeout(socket: Socket[F]): F[Response[F]] = {
@@ -132,32 +132,45 @@ package object ember {
     }
 
     def onTimeout(socket: Socket[F], fin: FiniteDuration): F[Response[F]] = for {
-      start <- C.realTime(MILLISECONDS)
-      _ <- Encoder.reqToBytes(request)
+      start <- T.clock.realTime(MILLISECONDS)
+      e <- Concurrent[F].race(
+        T.sleep(fin),
+        Encoder.reqToBytes(request)
         .to(socket.writes(Some(fin)))
         .last
         .onFinalize(socket.endOfOutput)
         .compile
         .drain
+      ).flatMap{
+        _.leftMap(_ => new Throwable("Timeout!")).liftTo[F]
+      }
+
       _ <- Sync[F].delay(println("Finished Writing Request"))
       timeoutSignal <- SignallingRef[F, Boolean](true)
-      sent <- C.realTime(MILLISECONDS)
+      sent <- T.clock.realTime(MILLISECONDS)
       remains = fin - (sent - start).millis
-      resp <- readWithTimeout(socket, remains, timeoutSignal.get, chunkSize)
+      resp <- Concurrent[F].race(
+        T.sleep(remains),
+        readWithTimeout(socket, remains, timeoutSignal.get, chunkSize)
         .through (Parser.Response.parser[F](maxResponseHeaderSize))
         .take(1)
         .compile
         .lastOrError
+      ).flatMap{
+        _.leftMap(_ => new Throwable("Timeout!")).liftTo[F]
+      }
       _ <- timeoutSignal.set(false).void
     } yield resp
 
     for {
       initSocket <- Resource.liftF(codec.Shared.addressForRequest(request))
         .flatMap(io.tcp.client[F](_))
+      _ <- Resource.liftF(Sync[F].delay(println("Initial Socket Received")))
       socket <- Resource.liftF{
         if (request.uri.scheme.exists(_ === Uri.Scheme.https)) util.liftToSecure[F](sslExecutionContext, sslContext)(initSocket, true)
         else Applicative[F].pure(initSocket)
       }
+      _ <- Resource.liftF(Sync[F].delay(println("Final Socket Received")))
       resp <- timeout match {
         case t: FiniteDuration => Resource.liftF(onTimeout(socket, t))
         case _ => Resource.liftF(onNoTimeout(socket))
