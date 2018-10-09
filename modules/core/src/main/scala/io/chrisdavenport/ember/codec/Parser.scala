@@ -73,40 +73,44 @@ object Parser {
 
   object Req{
 
-    def parser[F[_]: Sync](maxHeaderLength: Int): Pipe[F, Byte, Request[F]] =
+    def parser[F[_]: MonadError[?[_], Throwable]](maxHeaderLength: Int): Pipe[F, Byte, Request[F]] =
       _.through(httpHeaderAndBody[F](maxHeaderLength))
-        .map{case (bv, body) => headerBlobByteVectorToRequest[F](bv, body, maxHeaderLength)}
+        .evalMap{case (bv, body) => headerBlobByteVectorToRequest[F](bv, body, maxHeaderLength)}
 
-    def headerBlobByteVectorToRequest[F[_]: Sync](b: ByteVector, s: Stream[F, Byte], maxHeaderLength: Int): Request[F] = {
-      val (methodHttpUri, headersBV) = splitHeader(b).fold(throw new Throwable("Invalid Empty Init Line"))(identity)
-      val headers = generateHeaders(headersBV)(Headers.empty)
-      val (method, uri, http) = bvToRequestTopLine(methodHttpUri)
+    def headerBlobByteVectorToRequest[F[_]: MonadError[?[_], Throwable]](b: ByteVector, s: Stream[F, Byte], maxHeaderLength: Int): F[Request[F]] = 
+      for {
+
+        (methodHttpUri, headersBV) <- splitHeader(b).fold(
+          ApplicativeError[F, Throwable].raiseError[(ByteVector, ByteVector)](new Throwable("Invalid Empty Init Line"))
+        )(Applicative[F].pure(_))
+        headers = generateHeaders(headersBV)(Headers.empty)
+        (method, uri, http) <- bvToRequestTopLine[F](methodHttpUri)
+        
+        contentLength = headers.get(org.http4s.headers.`Content-Length`).map(_.length).getOrElse(0L)
+        isChunked = headers.get(org.http4s.headers.`Transfer-Encoding`).exists(_.value.toList.contains(TransferCoding.chunked))
+
+        body = Alternative[Option].guard(isChunked).fold(
+          s.take(contentLength)
+        )(_ => s.through(ChunkedEncoding.decode(maxHeaderLength)))
+
+        
+      } yield Request[F](
+          method = method,
+          uri = uri,
+          httpVersion = http,
+          headers = headers,
+          body = body
+        )
+
+    def bvToRequestTopLine[F[_]: MonadError[?[_], Throwable]](b: ByteVector): F[(Method, Uri, HttpVersion)] = for {
+      (method, rest) <- getMethodEmitRest[F](b)
+      (uri, httpVString) <- getUriEmitHttpVersion[F](rest)
+      httpVersion = getHttpVersion(httpVString)
       
-      val contentLength = headers.get(org.http4s.headers.`Content-Length`).map(_.length).getOrElse(0L)
-      val isChunked = headers.get(org.http4s.headers.`Transfer-Encoding`).exists(_.value.toList.contains(TransferCoding.chunked))
-
-      val body = Alternative[Option].guard(isChunked).fold(
-        s.take(contentLength)
-      )(_ => s.through(ChunkedEncoding.decode(maxHeaderLength)))
-
-      Request[F](
-        method = method,
-        uri = uri,
-        httpVersion = http,
-        headers = headers,
-        body = body
-      )
-    }
-
-    def bvToRequestTopLine(b: ByteVector): (Method, Uri, HttpVersion) = {
-      val (method, rest) = getMethodEmitRest(b)
-      val (uri, httpVString) = getUriEmitHttpVersion(rest)
-      val httpVersion = getHttpVersion(httpVString)
-      (method, uri, httpVersion)
-    }
+    } yield (method, uri, httpVersion)
 
 
-    def getMethodEmitRest(b: ByteVector): (Method, String) = {
+    def getMethodEmitRest[F[_]: ApplicativeError[?[_], Throwable]](b: ByteVector): F[(Method, String)] = {
       val opt = for {
         line <- b.decodeAscii.right.toOption
         idx <- Some(line indexOf ' ')
@@ -114,17 +118,21 @@ object Parser {
         out <- Method.fromString(line.substring(0, idx)).toOption
       } yield (out, line.substring(idx + 1))
 
-      opt.fold(throw new Throwable("Missing Method"))(identity)
+      opt.fold(
+        ApplicativeError[F, Throwable].raiseError[(Method, String)](new Throwable("Missing Method"))
+        )(ApplicativeError[F, Throwable].pure(_))
     }
 
-    def getUriEmitHttpVersion(s: String): (Uri, String) = {
+    def getUriEmitHttpVersion[F[_]: ApplicativeError[?[_], Throwable]](s: String): F[(Uri, String)] = {
       val opt = for {
         idx <- Some(s indexOf ' ')
         if (idx >= 0)
         uri <- Uri.fromString(s.substring(0, idx)).toOption
       } yield (uri, s.substring(idx + 1))
 
-      opt.fold(throw new Throwable("Missing URI"))(identity)
+      opt.fold(
+        ApplicativeError[F, Throwable].raiseError[(Uri, String)](new Throwable("Missing URI"))
+      )(ApplicativeError[F, Throwable].pure(_))
     }
   }
 
