@@ -13,6 +13,7 @@ import org.http4s.Method
 import org.http4s.Response
 import org.http4s._
 import codec.Shared._
+import scala.concurrent.duration.MILLISECONDS
 
 package object util {
     /**
@@ -33,24 +34,28 @@ package object util {
     , timeout: FiniteDuration
     , shallTimeout: F[Boolean]
     , chunkSize: Int
-  )(implicit F: Effect[F]) : Stream[F, Byte] = {
-    def go(remains:FiniteDuration) : Stream[F, Byte] = {
-      Stream.eval(shallTimeout).flatMap { shallTimeout =>
-        if (!shallTimeout) socket.reads(chunkSize, None)
-        else {
-          if (remains <= 0.millis) Stream.raiseError[F](new Exception("Timeout!"))
-          else {
-            Stream.eval(F.delay(System.currentTimeMillis())).flatMap { start =>
-            Stream.eval(socket.read(chunkSize, Some(remains))).flatMap { read =>
-            Stream.eval(F.delay(System.currentTimeMillis())).flatMap { end => read match {
-              case Some(bytes) => 
-                Stream.chunk(bytes) ++ go(remains - (end - start).millis)
-              case None => 
-                Stream.empty
-            }}}}
-          }
-        }
-      }
+  )(implicit F: Effect[F], C: Clock[F]) : Stream[F, Byte] = {
+    def whenWontTimeout: Stream[F, Byte] = 
+      socket.reads(chunkSize, None)
+    def whenMayTimeout(remains: FiniteDuration): Stream[F, Byte] = {
+      if (remains <= 0.millis) Stream.raiseError[F](new Exception("Timeout!"))
+      else for {
+        start <- Stream.eval(C.realTime(MILLISECONDS))
+        read <- Stream.eval(socket.read(chunkSize, Some(remains)))
+        end <- Stream.eval(C.realTime(MILLISECONDS))
+        out <- read.fold[Stream[F, Byte]](
+          Stream.empty
+        )(
+          Stream.chunk(_).covary[F] ++ go(remains - (end - start).millis)
+        )
+      } yield out
+    }
+    def go(remains: FiniteDuration) : Stream[F, Byte] = {
+        Stream.eval(shallTimeout)
+          .ifM(
+            whenMayTimeout(remains),
+            whenWontTimeout
+          )
     }
 
     go(timeout)
