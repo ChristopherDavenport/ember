@@ -25,14 +25,18 @@ package object ember {
     onError: Throwable => Response[F],
     onWriteFailure : (Option[Request[F]], Response[F], Throwable) => F[Unit],
     ag: AsynchronousChannelGroup,
-    terminationSignal: Signal[F, Boolean],
     // Defaults
+    terminationSignal: Option[SignallingRef[F, Boolean]] = None,
     maxConcurrency: Int = Int.MaxValue,
     receiveBufferSize: Int = 256 * 1024,
     maxHeaderSize: Int = 10 * 1024,
     requestHeaderReceiveTimeout: Duration = 5.seconds
   ): Stream[F, Nothing] = {
     implicit val AG = ag
+
+    // Termination Signal, if not present then does not terminate.
+    val termSignal: F[SignallingRef[F, Boolean]] = 
+      terminationSignal.fold(SignallingRef[F, Boolean](false))(_.pure[F])
     
     def socketReadRequest(
       socket: Socket[F], 
@@ -44,7 +48,7 @@ package object ember {
         }
         SignallingRef[F, Boolean](initial).flatMap{timeoutSignal =>
           readWithTimeout[F](socket, readDuration, timeoutSignal.get, receiveBufferSize)
-              .through(Parser.Req.parser(maxHeaderSize))
+              .through(Parser.Request.parser(maxHeaderSize))
               .take(1)
               .compile
               .lastOrError
@@ -54,7 +58,7 @@ package object ember {
               }
         }
       }
-
+    Stream.eval(termSignal).flatMap(terminationSignal => 
     tcp.server[F](bindAddress)
       .map(connect => 
         Stream.eval(
@@ -88,6 +92,7 @@ package object ember {
       ).parJoin(maxConcurrency)
         .interruptWhen(terminationSignal)
         .drain
+    )
   }
 
 
@@ -106,7 +111,7 @@ package object ember {
         .last
         .onFinalize(socket.endOfOutput)
         .flatMap { _ => socket.reads(chunkSize, None)}
-        .through(Parser.Resp.parser[F](maxResponseHeaderSize))
+        .through(Parser.Response.parser[F](maxResponseHeaderSize))
         .take(1)
         .compile
         .lastOrError
@@ -124,7 +129,7 @@ package object ember {
       sent <- C.realTime(MILLISECONDS)
       remains = fin - (sent - start).millis
       resp <- readWithTimeout(socket, remains, timeoutSignal.get, chunkSize)
-        .through (Parser.Resp.parser[F](maxResponseHeaderSize))
+        .through (Parser.Response.parser[F](maxResponseHeaderSize))
         .take(1)
         .compile
         .lastOrError
