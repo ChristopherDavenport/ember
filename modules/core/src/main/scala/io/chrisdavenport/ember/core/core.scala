@@ -6,6 +6,7 @@ import fs2.io.tcp
 import fs2.io.tcp._
 import cats._
 import cats.effect._
+import cats.effect.implicits._
 import cats.implicits._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
@@ -110,7 +111,7 @@ package object core {
     request: Request[F]
     , sslExecutionContext: ExecutionContext
     , acg: AsynchronousChannelGroup
-    , sslContext : SSLContext = { val ctx = SSLContext.getInstance("TLS"); ctx.init(null,null,null); ctx } 
+    , sslContext : SSLContext = SSLContext.getDefault
     , chunkSize: Int = 32*1024
     , maxResponseHeaderSize: Int = 4096
     , timeout: Duration = 5.seconds
@@ -128,18 +129,12 @@ package object core {
 
     def onTimeout(socket: Socket[F], fin: FiniteDuration): F[Response[F]] = for {
       start <- T.clock.realTime(MILLISECONDS)
-      e <- Concurrent[F].race(
-        T.sleep(fin) *> T.clock.realTime(MILLISECONDS),
-        Encoder.reqToBytes(request)
+      _ <- Sync[F].delay(println(s"Attempting to write Request $request"))
+      _ <- Encoder.reqToBytes(request)
         .to(socket.writes(Some(fin)))
-        .last
-        .onFinalize(socket.endOfOutput)
         .compile
         .drain
-      ).flatMap{
-        _.leftMap(now => EmberException.Timeout(start, now)).liftTo[F]
-      }
-
+        .start
       _ <- Sync[F].delay(println("Finished Writing Request"))
       timeoutSignal <- SignallingRef[F, Boolean](true)
       sent <- T.clock.realTime(MILLISECONDS)
@@ -153,12 +148,13 @@ package object core {
     for {
       initSocket <- Resource.liftF(Shared.addressForRequest(request))
         .flatMap(io.tcp.client[F](_))
-      _ <- Resource.liftF(Sync[F].delay(println("Initial Socket Received")))
       socket <- Resource.liftF{
-        if (request.uri.scheme.exists(_ === Uri.Scheme.https)) Util.liftToSecure[F](sslExecutionContext, sslContext)(initSocket, true)
+        if (request.uri.scheme.exists(_ === Uri.Scheme.https)) 
+          Sync[F].delay(println("Elevating Socket to ssl")) *>
+          Util.liftToSecure[F](sslExecutionContext, sslContext)(initSocket, true)
         else Applicative[F].pure(initSocket)
       }
-      _ <- Resource.liftF(Sync[F].delay(println("Final Socket Received")))
+      _ <- Resource.liftF(Sync[F].delay(println("Received Final Socket")))
       resp <- timeout match {
         case t: FiniteDuration => Resource.liftF(onTimeout(socket, t))
         case _ => Resource.liftF(onNoTimeout(socket))
