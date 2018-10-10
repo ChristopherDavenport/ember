@@ -10,7 +10,11 @@ This library attempts to direct its efforts at interop with http4s.
 First make sure you can get the current version.
 
 ```scala
-libraryDependencies ++= Seq("io.chrisdavenport" %% "ember-core" % "0.0.1")
+libraryDependencies ++= Seq(
+  "io.chrisdavenport" %% "ember-core" % "<version>",
+  "io.chrisdavenport" %% "ember-server" % "<version>",
+  "io.chrisdavenport" %% "ember-client" % "<version>"
+)
 ```
 
 Then plug in your http service into the server as demonstrated in the example and go wild.
@@ -26,5 +30,5 @@ scalacOptions ++= Seq("-Ypartial-unification")
 
 - [x] Chunked Encoding
 - [ ] Websocket Support
-- [ ] Client Support
+- [x] Client Support
 - [ ] Websocket Client
