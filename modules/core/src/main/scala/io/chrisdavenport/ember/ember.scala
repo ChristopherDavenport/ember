@@ -121,6 +121,7 @@ package object ember {
 
     def onNoTimeout(socket: Socket[F]): F[Response[F]] = {
       Encoder.reqToBytes(request)
+        .observe(_ => Stream.eval(Sync[F].delay(println("Chunk Written"))))
         .to(socket.writes(None))
         .last
         .onFinalize(socket.endOfOutput)
@@ -136,6 +137,7 @@ package object ember {
       e <- Concurrent[F].race(
         T.sleep(fin),
         Encoder.reqToBytes(request)
+        .observe(_ => Stream.eval(Sync[F].delay(println("Chunk Written"))))
         .to(socket.writes(Some(fin)))
         .last
         .onFinalize(socket.endOfOutput)
@@ -152,6 +154,7 @@ package object ember {
       resp <- Concurrent[F].race(
         T.sleep(remains),
         readWithTimeout(socket, remains, timeoutSignal.get, chunkSize)
+        .observe(_.through(fs2.text.utf8Decode[F]).evalMap(t => Sync[F].delay(println(s"Read - $t"))))
         .through (Parser.Response.parser[F](maxResponseHeaderSize))
         .take(1)
         .compile

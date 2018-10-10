@@ -20,7 +20,7 @@ object ClientExample extends IOApp{
     for {
       acg <- Stream.bracket(Sync[IO].delay(AsynchronousChannelGroup.withFixedThreadPool(100, Executors.defaultThreadFactory)))(acg => Sync[IO].delay(acg.shutdown))
       resp <- Stream.resource(_root_.io.chrisdavenport.ember.request[IO](
-        Request[IO](Method.GET, Uri.unsafeFromString("https://icanhazdadjoke.com/")),
+        Request[IO](Method.GET, Uri.unsafeFromString("https://www.google.com/")),
         acg,
         ExecutionContext.global
       ))
