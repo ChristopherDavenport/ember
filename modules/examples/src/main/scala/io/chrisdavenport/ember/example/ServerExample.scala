@@ -21,11 +21,11 @@ object ServerExample extends IOApp{
     val host = "0.0.0.0"
     val port = 8080
     for {
-      server <- EmberServer.impl[IO](
+      server <- Stream.resource(EmberServer.impl[IO](
         host,
         port,
         service[IO]
-      )
+      ))
       _ <- Stream.eval(IO.delay(println(s"Server Has Started at ${server.address}")))
       _ <- Stream.never[IO]
     } yield ()

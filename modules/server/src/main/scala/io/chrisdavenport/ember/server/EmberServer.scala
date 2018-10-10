@@ -14,9 +14,6 @@ import java.nio.channels.AsynchronousChannelGroup
 import io.chrisdavenport.ember.core.server
 
 
-abstract class EmberServer[F[_]] private () extends Server[F]{
-  def shutdown: F[Unit]
-}
 object EmberServer {
 
   def impl[F[_]: ConcurrentEffect: Clock](
@@ -29,15 +26,13 @@ object EmberServer {
     receiveBufferSize: Int = 256 * 1024,
     maxHeaderSize: Int = 10 * 1024,
     requestHeaderReceiveTimeout: Duration = 5.seconds
-  ): Stream[F, EmberServer[F]] = for {
-    socket <- Stream.eval(Sync[F].delay(new InetSocketAddress(host, port)))
-    acg <- Stream.resource(
-      Resource.make(
-        Sync[F].delay(
-          AsynchronousChannelGroup.withFixedThreadPool(100, Executors.defaultThreadFactory)
-        )
-      )(acg => Sync[F].delay(acg.shutdown))
-    )
+  ): Resource[F, Server[F]] = for {
+    socket <- Resource.liftF(Sync[F].delay(new InetSocketAddress(host, port)))
+    acg <- Resource.make(
+      Sync[F].delay(
+        AsynchronousChannelGroup.withFixedThreadPool(100, Executors.defaultThreadFactory)
+      )
+    )(acg => Sync[F].delay(acg.shutdown))
     out <- unopinionated(
       socket,
       httpApp,
@@ -62,31 +57,32 @@ object EmberServer {
     receiveBufferSize: Int = 256 * 1024,
     maxHeaderSize: Int = 10 * 1024,
     requestHeaderReceiveTimeout: Duration = 5.seconds
-  ): Stream[F, EmberServer[F]] = {
+  ): Resource[F, Server[F]] = {
     for {
-      shutdownSignal <- Stream.eval(SignallingRef[F, Boolean](false))
-      out <- Stream.emit(
-        new EmberServer[F](){
-          def shutdown: F[Unit] = shutdownSignal.set(true)
-  
-          // Members declared in org.http4s.server.Server
-          def address: java.net.InetSocketAddress = bindAddress
-          def isSecure: Boolean = false
-        }
-      ).concurrently(
-        server(
-          bindAddress,
-          httpApp,
-          ag,
-          onError,
-          onWriteFailure,
-          shutdownSignal.some,
-          maxConcurrency,
-          receiveBufferSize,
-          maxHeaderSize,
-          requestHeaderReceiveTimeout
+      shutdownSignal <- Resource.liftF(SignallingRef[F, Boolean](false))
+      _ <- Resource.liftF(
+        Concurrent[F].start(
+          server(
+            bindAddress,
+            httpApp,
+            ag,
+            onError,
+            onWriteFailure,
+            shutdownSignal.some,
+            maxConcurrency,
+            receiveBufferSize,
+            maxHeaderSize,
+            requestHeaderReceiveTimeout
+          ).compile
+          .drain
         )
       )
+      out <- Resource.make(
+        new Server[F]{
+          def address: InetSocketAddress = bindAddress
+          def isSecure: Boolean = false
+        }.pure[F]
+      )(_ => shutdownSignal.set(true))
     } yield out
   }
 }
