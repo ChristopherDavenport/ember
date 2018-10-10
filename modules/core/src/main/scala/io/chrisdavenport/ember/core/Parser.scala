@@ -20,18 +20,18 @@ object Parser {
     def go(buff: ByteVector, in: Stream[F, Byte]): Pull[F, (ByteVector, Stream[F, Byte]), Unit] = {
       in.pull.uncons flatMap {
         case None =>
-          Pull.raiseError[F](new Throwable(s"Incomplete Header received (sz = ${buff.size}): ${buff.decodeUtf8}"))
+          Pull.raiseError[F](EmberException.ParseError(s"Incomplete Header received (sz = ${buff.size}): ${buff.decodeUtf8}"))
         case Some((chunk, tl)) =>
           val bv = chunk2ByteVector(chunk)
           val all = buff ++ bv
           val idx = all.indexOfSlice(`\r\n\r\n`)
           if (idx < 0) {
-            if (all.size > maxHeaderSize) Pull.raiseError[F](new Throwable(s"Size of the header exceeded the limit of $maxHeaderSize (${all.size})"))
+            if (all.size > maxHeaderSize) Pull.raiseError[F](EmberException.ParseError(s"Size of the header exceeded the limit of $maxHeaderSize (${all.size})"))
             else go(all, tl)
           }
           else {
             val (h, t) = all.splitAt(idx)
-            if (h.size > maxHeaderSize)  Pull.raiseError[F](new Throwable(s"Size of the header exceeded the limit of $maxHeaderSize (${all.size})"))
+            if (h.size > maxHeaderSize)  Pull.raiseError[F](EmberException.ParseError(s"Size of the header exceeded the limit of $maxHeaderSize (${all.size})"))
             else  Pull.output1((h, Stream.chunk(Chunk.ByteVectorChunk(t.drop(`\r\n\r\n`.size))) ++ tl))
 
           }
@@ -81,7 +81,7 @@ object Parser {
       for {
 
         (methodHttpUri, headersBV) <- splitHeader(b).fold(
-          ApplicativeError[F, Throwable].raiseError[(ByteVector, ByteVector)](new Throwable("Invalid Empty Init Line"))
+          ApplicativeError[F, Throwable].raiseError[(ByteVector, ByteVector)](EmberException.ParseError("Invalid Empty Init Line"))
         )(Applicative[F].pure(_))
         headers = generateHeaders(headersBV)(Headers.empty)
         (method, uri, http) <- bvToRequestTopLine[F](methodHttpUri)
@@ -119,7 +119,7 @@ object Parser {
       } yield (out, line.substring(idx + 1))
 
       opt.fold(
-        ApplicativeError[F, Throwable].raiseError[(Method, String)](new Throwable("Missing Method"))
+        ApplicativeError[F, Throwable].raiseError[(Method, String)](EmberException.ParseError("Missing Method"))
         )(ApplicativeError[F, Throwable].pure(_))
     }
 
@@ -131,7 +131,7 @@ object Parser {
       } yield (uri, s.substring(idx + 1))
 
       opt.fold(
-        ApplicativeError[F, Throwable].raiseError[(Uri, String)](new Throwable("Missing URI"))
+        ApplicativeError[F, Throwable].raiseError[(Uri, String)](EmberException.ParseError("Missing URI"))
       )(ApplicativeError[F, Throwable].pure(_))
     }
   }
@@ -146,7 +146,7 @@ object Parser {
       for {
 
         (methodHttpUri, headersBV) <- splitHeader(b).fold(
-          ApplicativeError[F, Throwable].raiseError[(ByteVector, ByteVector)](new Throwable("Invalid Empty Init Line"))
+          ApplicativeError[F, Throwable].raiseError[(ByteVector, ByteVector)](EmberException.ParseError("Invalid Empty Init Line"))
         )(Applicative[F].pure(_))
         headers = generateHeaders(headersBV)(Headers.empty)
         (httpV, status) <- bvToResponseTopLine[F](methodHttpUri)
@@ -187,7 +187,8 @@ object Parser {
 
       for {
       (httpS, rest) <- opt.fold(
-        ApplicativeError[F, Throwable].raiseError[(String, String)](new Throwable("Missing HttpVersion"))
+        ApplicativeError[F, Throwable].raiseError[(String, String)](
+          EmberException.ParseError("Missing HttpVersion"))
         )(Applicative[F].pure(_))
       httpV <- HttpVersion.fromString(httpS).liftTo[F]
       } yield (httpV, rest)

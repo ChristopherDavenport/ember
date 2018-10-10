@@ -18,7 +18,7 @@ package object core {
 
   private val logger = org.log4s.getLogger
 
-  def server[F[_]: ConcurrentEffect: Clock](
+  def server[F[_]: ConcurrentEffect](
     bindAddress: InetSocketAddress,
     httpApp: HttpApp[F],
     ag: AsynchronousChannelGroup,
@@ -30,7 +30,7 @@ package object core {
     receiveBufferSize: Int = 256 * 1024,
     maxHeaderSize: Int = 10 * 1024,
     requestHeaderReceiveTimeout: Duration = 5.seconds
-  ): Stream[F, Nothing] = {
+  )(implicit C: Clock[F]): Stream[F, Nothing] = {
     implicit val AG = ag
 
     // Termination Signal, if not present then does not terminate.
@@ -55,7 +55,8 @@ package object core {
           case _ => (false, 0.millis)
         }
         SignallingRef[F, Boolean](initial).flatMap{timeoutSignal =>
-          readWithTimeout[F](socket, readDuration, timeoutSignal.get, receiveBufferSize)
+        C.realTime(MILLISECONDS).flatMap(
+          readWithTimeout[F](socket, _, readDuration, timeoutSignal.get, receiveBufferSize)
               .through(Parser.Request.parser(maxHeaderSize))
               .take(1)
               .compile
@@ -64,8 +65,9 @@ package object core {
                 Sync[F].delay(logger.debug(s"Request Processed $req")) *>
                 timeoutSignal.set(false).as(req)
               }
-        }
+        )}
       }
+
     Stream.eval(termSignal).flatMap(terminationSignal => 
     tcp.server[F](bindAddress)
       .map(connect => 
@@ -136,7 +138,7 @@ package object core {
       timeoutSignal <- SignallingRef[F, Boolean](true)
       sent <- C.realTime(MILLISECONDS)
       remains = fin - (sent - start).millis
-      resp <- readWithTimeout(socket, remains, timeoutSignal.get, chunkSize)
+      resp <- readWithTimeout(socket, sent, remains, timeoutSignal.get, chunkSize)
         .through (Parser.Response.parser[F](maxResponseHeaderSize))
         .take(1)
         .compile

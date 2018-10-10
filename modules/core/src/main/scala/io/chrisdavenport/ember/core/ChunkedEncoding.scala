@@ -24,12 +24,14 @@ object ChunkedEncoding {
               val nh = header ++ bv
               val endOfheader = nh.indexOfSlice(`\r\n`)
               if (endOfheader == 0) go(expect, Stream.chunk(Chunk.ByteVectorChunk(bv.drop(`\r\n`.size))) ++ tl) //strip any leading crlf on header, as this starts with /r/n
-              else if (endOfheader < 0 && nh.size > maxChunkHeaderSize) Pull.raiseError[F](new Throwable(s"Failed to get Chunk header. Size exceeds max($maxChunkHeaderSize) : ${nh.size} ${nh.decodeUtf8}"))
+              else if (endOfheader < 0 && nh.size > maxChunkHeaderSize) 
+                Pull.raiseError[F](EmberException.ChunkedEncodingError(s"Failed to get Chunk header. Size exceeds max($maxChunkHeaderSize) : ${nh.size} ${nh.decodeUtf8}"))
               else if (endOfheader < 0) go(Left(nh), tl)
               else {
                 val (hdr,rem) = nh.splitAt(endOfheader + `\r\n`.size)
                 readChunkedHeader(hdr.dropRight(`\r\n`.size)) match {
-                  case None => Pull.raiseError[F](new Throwable(s"Failed to parse chunked header : ${hdr.decodeUtf8}"))
+                  case None => Pull.raiseError[F](
+                    EmberException.ChunkedEncodingError(s"Failed to parse chunked header : ${hdr.decodeUtf8}"))
                   case Some(0) => Pull.done
                   case Some(sz) => go(Right(sz), Stream.chunk(Chunk.ByteVectorChunk(rem)) ++ tl)
                 }

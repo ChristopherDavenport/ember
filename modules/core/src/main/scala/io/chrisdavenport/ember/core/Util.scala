@@ -31,6 +31,7 @@ package object Util {
    */
     def readWithTimeout[F[_]](
     socket: Socket[F]
+    , started: Long
     , timeout: FiniteDuration
     , shallTimeout: F[Boolean]
     , chunkSize: Int
@@ -38,7 +39,10 @@ package object Util {
     def whenWontTimeout: Stream[F, Byte] = 
       socket.reads(chunkSize, None)
     def whenMayTimeout(remains: FiniteDuration): Stream[F, Byte] = {
-      if (remains <= 0.millis) Stream.raiseError[F](new Exception("Timeout!"))
+      if (remains <= 0.millis) 
+      Stream.eval(C.realTime(MILLISECONDS)).flatMap(now => 
+        Stream.raiseError[F](EmberException.Timeout(started, now))
+      )
       else for {
         start <- Stream.eval(C.realTime(MILLISECONDS))
         read <- Stream.eval(socket.read(chunkSize, Some(remains)))
@@ -57,7 +61,6 @@ package object Util {
             whenWontTimeout
           )
     }
-
     go(timeout)
   }
 
