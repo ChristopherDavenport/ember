@@ -129,13 +129,13 @@ package object core {
 
     def onTimeout(socket: Socket[F], fin: FiniteDuration): F[Response[F]] = for {
       start <- T.clock.realTime(MILLISECONDS)
-      _ <- Sync[F].delay(println(s"Attempting to write Request $request"))
+      // _ <- Sync[F].delay(println(s"Attempting to write Request $request"))
       _ <- (
         Encoder.reqToBytes(request)
         .to(socket.writes(Some(fin)))
         .compile
-        .drain >>
-        Sync[F].delay(println("Finished Writing Request"))
+        .drain //>>
+        // Sync[F].delay(println("Finished Writing Request"))
       ).start
       timeoutSignal <- SignallingRef[F, Boolean](true)
       sent <- T.clock.realTime(MILLISECONDS)
@@ -151,7 +151,7 @@ package object core {
       initSocket <- io.tcp.client[F](address)
       socket <- Resource.liftF{
         if (request.uri.scheme.exists(_ === Uri.Scheme.https)) 
-          Sync[F].delay(println("Elevating Socket to ssl")) *>
+          // Sync[F].delay(println("Elevating Socket to ssl")) *>
           Util.liftToSecure[F](
             sslExecutionContext, sslContext
           )(
@@ -162,7 +162,7 @@ package object core {
           )
         else Applicative[F].pure(initSocket)
       }
-      _ <- Resource.liftF(Sync[F].delay(println("Received Final Socket")))
+      // _ <- Resource.liftF(Sync[F].delay(println("Received Final Socket")))
       resp <- timeout match {
         case t: FiniteDuration => Resource.liftF(onTimeout(socket, t))
         case _ => Resource.liftF(onNoTimeout(socket))

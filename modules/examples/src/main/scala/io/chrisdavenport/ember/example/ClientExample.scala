@@ -17,7 +17,7 @@ object ClientExample extends IOApp{
   def run(args: List[String]) : IO[ExitCode] = {
     val githubReq = Request[IO](Method.GET, Uri.unsafeFromString("http://christopherdavenport.github.io/"))
     val googleReq = Request[IO](Method.GET, Uri.unsafeFromString("https://www.google.com/"))
-    val randomReq = Request[IO](Method.GET, Uri.unsafeFromString("https://reqres.in/api/users?page=2"))
+    val randomReq = Request[IO](Method.GET, Uri.unsafeFromString("https://icanhazdadjoke.com/"))
     EmberClient.simple[IO](global)
       .use( client => 
         // Not Https
