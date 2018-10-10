@@ -1,5 +1,5 @@
 lazy val root = project.in(file("."))
-  .aggregate(core, server, examples)
+  .aggregate(core, server, client, examples)
   .settings(commonSettings)
   .settings(noPublish)
 
@@ -21,10 +21,21 @@ lazy val server = project.in(file("modules/server"))
     )
   )
 
+lazy val client = project.in(file("modules/client"))
+  .settings(commonSettings)
+  .settings(releaseSettings)
+  .dependsOn(core)
+  .settings(
+    name := projectName("client"),
+    libraryDependencies ++= Seq(
+      "org.http4s"                  %% "http4s-client"              % http4sV
+    )
+  )
+
 lazy val examples = project.in(file("modules/examples"))
   .settings(commonSettings)
   .settings(noPublish)
-  .dependsOn(core, server)
+  .dependsOn(core, server, client)
   .settings(
     name := projectName("examples"),
     libraryDependencies ++= Seq(
