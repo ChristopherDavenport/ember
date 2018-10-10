@@ -60,7 +60,7 @@ object EmberServer {
   ): Resource[F, Server[F]] = {
     for {
       shutdownSignal <- Resource.liftF(SignallingRef[F, Boolean](false))
-      _ <- Resource.liftF(
+      out <- Resource.make(
         Concurrent[F].start(
           server(
             bindAddress,
@@ -75,13 +75,12 @@ object EmberServer {
             requestHeaderReceiveTimeout
           ).compile
           .drain
+        ).as(
+          new Server[F]{
+            def address: InetSocketAddress = bindAddress
+            def isSecure: Boolean = false
+          }
         )
-      )
-      out <- Resource.make(
-        new Server[F]{
-          def address: InetSocketAddress = bindAddress
-          def isSecure: Boolean = false
-        }.pure[F]
       )(_ => shutdownSignal.set(true))
     } yield out
   }
