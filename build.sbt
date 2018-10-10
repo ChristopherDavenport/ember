@@ -80,10 +80,11 @@ lazy val commonSettings = Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
     "co.fs2"                      %% "fs2-io"                     % fs2V,
-    "org.http4s"                  %% "http4s-core"              % http4sV,
+    "org.http4s"                  %% "http4s-core"                % http4sV,
 
     "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
     "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test,
+    "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
     "org.typelevel"               %% "discipline"                 % disciplineV   % Test,
     "com.github.alexarchambault"  %% "scalacheck-shapeless_1.13"  % scShapelessV  % Test
   )

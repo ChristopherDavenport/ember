@@ -55,16 +55,14 @@ package object core {
           case _ => (false, 0.millis)
         }
         SignallingRef[F, Boolean](initial).flatMap{timeoutSignal =>
-        C.realTime(MILLISECONDS).flatMap(
-          readWithTimeout[F](socket, _, readDuration, timeoutSignal.get, receiveBufferSize)
-              .through(Parser.Request.parser(maxHeaderSize))
-              .take(1)
-              .compile
-              .lastOrError
-              .flatMap{req => 
-                Sync[F].delay(logger.debug(s"Request Processed $req")) *>
-                timeoutSignal.set(false).as(req)
-              }
+        C.realTime(MILLISECONDS).flatMap(now => 
+          Parser.Request.parser(maxHeaderSize)(
+            readWithTimeout[F](socket, now, readDuration, timeoutSignal.get, receiveBufferSize)
+          )
+            .flatMap{req => 
+              Sync[F].delay(logger.debug(s"Request Processed $req")) *>
+              timeoutSignal.set(false).as(req)
+            }
         )}
       }
 
@@ -115,17 +113,14 @@ package object core {
   )(implicit C: Clock[F]): Resource[F, Response[F]] = {
     implicit val ACG : AsynchronousChannelGroup = acg
 
-    def onNoTimeout(socket: Socket[F]): F[Response[F]] = {
-      Encoder.reqToBytes(request)
+    def onNoTimeout(socket: Socket[F]): F[Response[F]] = 
+      Parser.Response.parser(maxResponseHeaderSize)(
+        Encoder.reqToBytes(request)
         .to(socket.writes(None))
         .last
         .onFinalize(socket.endOfOutput)
         .flatMap { _ => socket.reads(chunkSize, None)}
-        .through(Parser.Response.parser[F](maxResponseHeaderSize))
-        .take(1)
-        .compile
-        .lastOrError
-    }
+      )
 
     def onTimeout(socket: Socket[F], fin: FiniteDuration): F[Response[F]] = for {
       start <- C.realTime(MILLISECONDS)
@@ -138,11 +133,9 @@ package object core {
       timeoutSignal <- SignallingRef[F, Boolean](true)
       sent <- C.realTime(MILLISECONDS)
       remains = fin - (sent - start).millis
-      resp <- readWithTimeout(socket, sent, remains, timeoutSignal.get, chunkSize)
-        .through (Parser.Response.parser[F](maxResponseHeaderSize))
-        .take(1)
-        .compile
-        .lastOrError
+      resp <- Parser.Response.parser[F](maxResponseHeaderSize)(
+        readWithTimeout(socket, sent, remains, timeoutSignal.get, chunkSize)
+      )
       _ <- timeoutSignal.set(false).void
     } yield resp
 
