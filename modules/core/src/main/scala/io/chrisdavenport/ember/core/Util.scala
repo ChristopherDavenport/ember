@@ -68,9 +68,11 @@ package object Util {
   }
 
   /** creates a function that lifts supplied socket to secure socket **/
-  def liftToSecure[F[_] : Concurrent : ContextShift](sslES: => ExecutionContext, sslContext: => SSLContext)(socket: Socket[F], clientMode: Boolean): F[Socket[F]] = {
+  def liftToSecure[F[_] : Concurrent : ContextShift](
+    sslES: ExecutionContext, sslContext: SSLContext
+  )(socket: Socket[F], clientMode: Boolean)(host: String, port: Int): F[Socket[F]] = {
     for {
-      sslEngine <- Sync[F].delay(sslContext.createSSLEngine())
+      sslEngine <- Sync[F].delay(sslContext.createSSLEngine(host, port))
       _ <- Sync[F].delay(sslEngine.setUseClientMode(clientMode))
       secureSocket <- TLSSocket.instance[F](socket, sslEngine, sslES)
       _ <- secureSocket.startHandshake

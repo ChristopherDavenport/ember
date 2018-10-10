@@ -147,12 +147,19 @@ package object core {
     } yield resp
 
     for {
-      initSocket <- Resource.liftF(Shared.addressForRequest(request))
-        .flatMap(io.tcp.client[F](_))
+      address <- Resource.liftF(Shared.addressForRequest(request))
+      initSocket <- io.tcp.client[F](address)
       socket <- Resource.liftF{
         if (request.uri.scheme.exists(_ === Uri.Scheme.https)) 
           Sync[F].delay(println("Elevating Socket to ssl")) *>
-          Util.liftToSecure[F](sslExecutionContext, sslContext)(initSocket, true)
+          Util.liftToSecure[F](
+            sslExecutionContext, sslContext
+          )(
+            initSocket, true
+          )(
+            request.uri.authority.getOrElse(Uri.Authority()).host.value,
+            request.uri.authority.getOrElse(Uri.Authority()).port.getOrElse(443)
+          )
         else Applicative[F].pure(initSocket)
       }
       _ <- Resource.liftF(Sync[F].delay(println("Received Final Socket")))

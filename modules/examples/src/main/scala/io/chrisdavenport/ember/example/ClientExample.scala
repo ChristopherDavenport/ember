@@ -17,7 +17,7 @@ object ClientExample extends IOApp{
   def run(args: List[String]) : IO[ExitCode] = {
     val githubReq = Request[IO](Method.GET, Uri.unsafeFromString("http://christopherdavenport.github.io/"))
     val googleReq = Request[IO](Method.GET, Uri.unsafeFromString("https://www.google.com/"))
-    val randomReq = Request[IO](Method.GET, Uri.unsafeFromString("https://www.reddit.com/r/programmerhumor"))
+    val randomReq = Request[IO](Method.GET, Uri.unsafeFromString("https://reqres.in/api/users?page=2"))
     EmberClient.simple[IO](global)
       .use( client => 
         // Not Https
@@ -27,7 +27,7 @@ object ClientExample extends IOApp{
         client.fetch(googleReq)(resp => 
           Sync[IO].delay(println(s"Google - $resp"))
         ) *>
-        client.expect[String](randomReq).flatMap{ random => 
+        client.expect[Json](randomReq).flatMap{ random => 
           Sync[IO].delay(println(s"Random - $random"))
         }
 
