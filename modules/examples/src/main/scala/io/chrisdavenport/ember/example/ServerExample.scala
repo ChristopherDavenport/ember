@@ -24,7 +24,7 @@ object ServerExample extends IOApp{
       server <- EmberServer.impl[IO](
         host,
         port,
-        service[IO],
+        service[IO]
       )
       _ <- Stream.eval(IO.delay(println(s"Server Has Started at ${server.address}")))
       _ <- Stream.never[IO]
