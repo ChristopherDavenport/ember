@@ -1,4 +1,4 @@
-package io.chrisdavenport.ember.codec
+package io.chrisdavenport.ember.core
 
 import org.specs2.mutable.Specification
 import cats.implicits._
@@ -43,7 +43,7 @@ class EncoderSpec extends Specification {
       Helpers.encodeRequestRig(req).unsafeRunSync must_=== expected
     }
 
-    "encode a body with a request correctly" in {
+    "encode a request with a body correctly" in {
       val req = Request[IO](Method.POST, Uri.unsafeFromString("http://www.google.com"))
         .withEntity("Hello World!")
       val expected = 
@@ -54,9 +54,36 @@ class EncoderSpec extends Specification {
       |
       |Hello World!""".stripMargin
 
-      Await.result(Helpers.encodeRequestRig(req).unsafeToFuture, 1.second) must_=== expected
+      Helpers.encodeRequestRig(req).unsafeRunSync must_=== expected
     }
   }
-  
+
+  "Encoder.respToBytes" should {
+    "encode a no body response correctly" in {
+      val resp = Response[IO](Status.Ok)
+
+      val expected = 
+      """HTTP/1.1 200 OK
+      |
+      |""".stripMargin
+
+      Helpers.encodeResponseRig(resp).unsafeRunSync must_=== expected
+    }
+
+    "encode a response with a body correctly" in {
+      val resp = Response[IO](Status.NotFound)
+        .withEntity("Not Found")
+        
+
+      val expected = 
+      """HTTP/1.1 404 Not Found
+      |Content-Length: 9
+      |Content-Type: text/plain; charset=UTF-8
+      |
+      |Not Found""".stripMargin
+
+      Helpers.encodeResponseRig(resp).unsafeRunSync must_=== expected
+    }
+  }
 
 }

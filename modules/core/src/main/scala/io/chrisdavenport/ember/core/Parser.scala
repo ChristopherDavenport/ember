@@ -1,4 +1,4 @@
-package io.chrisdavenport.ember.codec
+package io.chrisdavenport.ember.core
 
 import cats._
 import cats.implicits._
@@ -20,18 +20,18 @@ object Parser {
     def go(buff: ByteVector, in: Stream[F, Byte]): Pull[F, (ByteVector, Stream[F, Byte]), Unit] = {
       in.pull.uncons flatMap {
         case None =>
-          Pull.raiseError[F](new Throwable(s"Incomplete Header received (sz = ${buff.size}): ${buff.decodeUtf8}"))
+          Pull.raiseError[F](EmberException.ParseError(s"Incomplete Header received (sz = ${buff.size}): ${buff.decodeUtf8}"))
         case Some((chunk, tl)) =>
           val bv = chunk2ByteVector(chunk)
           val all = buff ++ bv
           val idx = all.indexOfSlice(`\r\n\r\n`)
           if (idx < 0) {
-            if (all.size > maxHeaderSize) Pull.raiseError[F](new Throwable(s"Size of the header exceeded the limit of $maxHeaderSize (${all.size})"))
+            if (all.size > maxHeaderSize) Pull.raiseError[F](EmberException.ParseError(s"Size of the header exceeded the limit of $maxHeaderSize (${all.size})"))
             else go(all, tl)
           }
           else {
             val (h, t) = all.splitAt(idx)
-            if (h.size > maxHeaderSize)  Pull.raiseError[F](new Throwable(s"Size of the header exceeded the limit of $maxHeaderSize (${all.size})"))
+            if (h.size > maxHeaderSize)  Pull.raiseError[F](EmberException.ParseError(s"Size of the header exceeded the limit of $maxHeaderSize (${all.size})"))
             else  Pull.output1((h, Stream.chunk(Chunk.ByteVectorChunk(t.drop(`\r\n\r\n`.size))) ++ tl))
 
           }
@@ -43,62 +43,87 @@ object Parser {
   @tailrec
   def generateHeaders(byteVector: ByteVector)(acc: Headers) : Headers = {
     val headerO = splitHeader(byteVector)
+    // println(headerO)
 
-    headerO match {
-      case Some((lineBV, rest)) =>
-        val headerO = for {
-          line <- lineBV.decodeAscii.right.toOption
+    def generateHeaderForLine(bv: ByteVector): Option[Header] = {
+      for {
+          line <- bv.decodeAscii.right.toOption
+          // _ = println(s"Generate Headers - line: ${line}")
           idx <- Some(line indexOf ':')
           if idx >= 0
           header = Header(line.substring(0, idx), line.substring(idx + 1).trim)
+          // _ = println(s"generateHeaders - header: ${header}")
         } yield header
-        val newHeaders = acc ++ headerO
-        logger.trace(s"Generate Headers Header0 = $headerO")
-        generateHeaders(rest)(newHeaders)
-      case None => acc
     }
+
+    headerO match {
+      case Right((lineBV, rest)) =>
+        val headerO = generateHeaderForLine(lineBV)
+        val newHeaders = acc ++ headerO
+        // println(s"Generate Headers Header0 = $headerO")
+        generateHeaders(rest)(newHeaders)
+      case Left(bv) => 
+        val headerO = generateHeaderForLine(bv)
+        headerO ++ acc
+    }
+    
 
   }
 
-  def splitHeader(byteVector: ByteVector): Option[(ByteVector, ByteVector)] = {
+  def splitHeader(byteVector: ByteVector): Either[ByteVector, (ByteVector, ByteVector)] = {
     val index = byteVector.indexOfSlice(`\r\n`)
     if (index >= 0L) {
       val (line, rest) = byteVector.splitAt(index)
-      Option((line, rest.drop(`\r\n`.length)))
+      // println(s"splitHeader - Slice: ${line.decodeAscii}- Rest: ${rest.decodeAscii}")
+      Either.right((line, rest.drop(`\r\n`.length)))
     }
     else {
-      Option.empty[(ByteVector, ByteVector)]
+      Either.left(byteVector)
     }
   }
 
   object Request {
 
-    def parser[F[_]: MonadError[?[_], Throwable]](maxHeaderLength: Int): Pipe[F, Byte, Request[F]] =
-      _.through(httpHeaderAndBody[F](maxHeaderLength))
+    def parser[F[_]: Sync](maxHeaderLength: Int)(s: Stream[F, Byte]): F[Request[F]] =
+      s.through(httpHeaderAndBody[F](maxHeaderLength))
         .evalMap{case (bv, body) => headerBlobByteVectorToRequest[F](bv, body, maxHeaderLength)}
+        .take(1)
+        .compile
+        .lastOrError
 
     private def headerBlobByteVectorToRequest[F[_]: MonadError[?[_], Throwable]](b: ByteVector, s: Stream[F, Byte], maxHeaderLength: Int): F[Request[F]] = 
       for {
 
         (methodHttpUri, headersBV) <- splitHeader(b).fold(
-          ApplicativeError[F, Throwable].raiseError[(ByteVector, ByteVector)](new Throwable("Invalid Empty Init Line"))
-        )(Applicative[F].pure(_))
+          _ => ApplicativeError[F, Throwable].raiseError[(ByteVector, ByteVector)](EmberException.ParseError("Invalid Empty Init Line"))
+          , Applicative[F].pure(_)
+        )
+        // Raw Header Logging
+        // _ = println(s"HeadersSection - ${headersBV.decodeAscii}")
+
         headers = generateHeaders(headersBV)(Headers.empty)
+        // _ = println(headers)
+
         (method, uri, http) <- bvToRequestTopLine[F](methodHttpUri)
         
         contentLength = headers.get(org.http4s.headers.`Content-Length`).map(_.length).getOrElse(0L)
+        host = headers.get(org.http4s.headers.Host)
         isChunked = headers.get(org.http4s.headers.`Transfer-Encoding`).exists(_.value.toList.contains(TransferCoding.chunked))
 
         body = Alternative[Option].guard(isChunked).fold(
           s.take(contentLength)
         )(_ => s.through(ChunkedEncoding.decode(maxHeaderLength)))
 
-        
+        // enriched with host
+        // seems presumptious
+        newUri = uri.copy(authority = host.map(h => Uri.Authority(host = Uri.RegName(h.host), port = h.port)))
+        newHeaders = headers.filterNot(_.is(org.http4s.headers.Host))
+
       } yield org.http4s.Request[F](
           method = method,
-          uri = uri,
+          uri = newUri,
           httpVersion = http,
-          headers = headers,
+          headers = newHeaders,
           body = body
         )
 
@@ -119,7 +144,7 @@ object Parser {
       } yield (out, line.substring(idx + 1))
 
       opt.fold(
-        ApplicativeError[F, Throwable].raiseError[(Method, String)](new Throwable("Missing Method"))
+        ApplicativeError[F, Throwable].raiseError[(Method, String)](EmberException.ParseError("Missing Method"))
         )(ApplicativeError[F, Throwable].pure(_))
     }
 
@@ -131,23 +156,27 @@ object Parser {
       } yield (uri, s.substring(idx + 1))
 
       opt.fold(
-        ApplicativeError[F, Throwable].raiseError[(Uri, String)](new Throwable("Missing URI"))
+        ApplicativeError[F, Throwable].raiseError[(Uri, String)](EmberException.ParseError("Missing URI"))
       )(ApplicativeError[F, Throwable].pure(_))
     }
   }
 
   object Response {
 
-    def parser[F[_]: MonadError[?[_], Throwable]](maxHeaderLength: Int): Pipe[F, Byte, Response[F]] =
-      _.through(httpHeaderAndBody[F](maxHeaderLength))
+    def parser[F[_]: Sync](maxHeaderLength: Int)(s: Stream[F, Byte]): F[Response[F]] =
+      s.through(httpHeaderAndBody[F](maxHeaderLength))
         .evalMap{case (bv, body) => headerBlobByteVectorToResponse[F](bv, body, maxHeaderLength)}
+        .take(1)
+        .compile
+        .lastOrError
 
     private def headerBlobByteVectorToResponse[F[_]: MonadError[?[_], Throwable]](b: ByteVector, s: Stream[F, Byte], maxHeaderLength: Int): F[Response[F]] = 
       for {
 
         (methodHttpUri, headersBV) <- splitHeader(b).fold(
-          ApplicativeError[F, Throwable].raiseError[(ByteVector, ByteVector)](new Throwable("Invalid Empty Init Line"))
-        )(Applicative[F].pure(_))
+          _ => ApplicativeError[F, Throwable].raiseError[(ByteVector, ByteVector)](EmberException.ParseError("Invalid Empty Init Line"))
+          , Applicative[F].pure(_)
+        )
         headers = generateHeaders(headersBV)(Headers.empty)
         (httpV, status) <- bvToResponseTopLine[F](methodHttpUri)
         
@@ -187,7 +216,8 @@ object Parser {
 
       for {
       (httpS, rest) <- opt.fold(
-        ApplicativeError[F, Throwable].raiseError[(String, String)](new Throwable("Missing HttpVersion"))
+        ApplicativeError[F, Throwable].raiseError[(String, String)](
+          EmberException.ParseError("Missing HttpVersion"))
         )(Applicative[F].pure(_))
       httpV <- HttpVersion.fromString(httpS).liftTo[F]
       } yield (httpV, rest)

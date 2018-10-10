@@ -13,21 +13,22 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.circe._
 import _root_.io.circe._
 
-object Example extends IOApp{
+import _root_.io.chrisdavenport.ember.server.EmberServer
+
+object ServerExample extends IOApp{
 
   def run(args: List[String]) : IO[ExitCode] = {
-    val address = "0.0.0.0"
+    val host = "0.0.0.0"
     val port = 8080
-    val inetAddress = new InetSocketAddress(address, port)
-    val acg = AsynchronousChannelGroup.withFixedThreadPool(100, Executors.defaultThreadFactory)
-
     for {
-      exitCode <- _root_.io.chrisdavenport.ember.server[IO](
-        inetAddress,
-        service[IO],
-        acg
-      ).concurrently(Stream.eval(IO.delay(println("Server Has Started"))))
-    } yield exitCode
+      server <- Stream.resource(EmberServer.impl[IO](
+        host,
+        port,
+        service[IO]
+      ))
+      _ <- Stream.eval(IO.delay(println(s"Server Has Started at ${server.address}")))
+      _ <- Stream.never[IO]
+    } yield ()
   }.compile.drain.as(ExitCode.Success)
 
   def service[F[_]: Sync] : HttpApp[F] = {

@@ -1,4 +1,4 @@
-package io.chrisdavenport.ember.codec
+package io.chrisdavenport.ember.core
 
 import fs2._
 import scodec.bits.ByteVector
@@ -6,6 +6,7 @@ import cats.effect._
 import cats.implicits._
 import org.http4s._
 import java.net.InetSocketAddress
+
 
 object Shared {
 
@@ -26,8 +27,8 @@ object Shared {
   /** evaluates address from the host port and scheme, if this is a custom scheme we will default to port 8080**/
   def addressForRequest[F[_]: Sync](req: Request[F]): F[InetSocketAddress] = 
     for {
-      scheme <- req.uri.scheme.toRight(new IllegalArgumentException("Missing Scheme")).liftTo[F]
-      host <- req.uri.host.toRight(new IllegalArgumentException("Missing Host")).liftTo[F]
+      scheme <- req.uri.scheme.toRight(EmberException.IncompleteClientRequest("Scheme")).liftTo[F]
+      host <- req.uri.host.toRight(EmberException.IncompleteClientRequest("Host")).liftTo[F]
       socketAddress <- addressForComponents(scheme, host, req.uri.port)
     } yield socketAddress
     
@@ -38,8 +39,9 @@ object Shared {
         case Uri.Scheme.http => 80.some
         case _ => Option.empty[Int]
       }
-    }.toRight(new IllegalArgumentException("Missing Port"))
+    }.toRight(EmberException.IncompleteClientRequest("Port"))
     .liftTo[F]
     .map(new InetSocketAddress(host.value, _))
   }
 }
+

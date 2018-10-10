@@ -1,5 +1,5 @@
 lazy val root = project.in(file("."))
-  .aggregate(core, examples)
+  .aggregate(core, server, client, examples)
   .settings(commonSettings)
   .settings(noPublish)
 
@@ -10,10 +10,32 @@ lazy val core = project.in(file("modules/core"))
       name := projectName("core")
     )
 
+lazy val server = project.in(file("modules/server"))
+  .settings(commonSettings)
+  .settings(releaseSettings)
+  .dependsOn(core)
+  .settings(
+    name := projectName("server"),
+    libraryDependencies ++= Seq(
+      "org.http4s"                  %% "http4s-server"              % http4sV
+    )
+  )
+
+lazy val client = project.in(file("modules/client"))
+  .settings(commonSettings)
+  .settings(releaseSettings)
+  .dependsOn(core)
+  .settings(
+    name := projectName("client"),
+    libraryDependencies ++= Seq(
+      "org.http4s"                  %% "http4s-client"              % http4sV
+    )
+  )
+
 lazy val examples = project.in(file("modules/examples"))
   .settings(commonSettings)
   .settings(noPublish)
-  .dependsOn(core)
+  .dependsOn(core, server, client)
   .settings(
     name := projectName("examples"),
     libraryDependencies ++= Seq(
@@ -61,8 +83,10 @@ lazy val commonSettings = Seq(
     "com.spinoco"                 %% "fs2-crypto"                 % "0.4.0",
     "org.http4s"                  %% "http4s-core"              % http4sV,
 
+
     "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
     "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test,
+    "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
     "org.typelevel"               %% "discipline"                 % disciplineV   % Test,
     "com.github.alexarchambault"  %% "scalacheck-shapeless_1.13"  % scShapelessV  % Test
   )

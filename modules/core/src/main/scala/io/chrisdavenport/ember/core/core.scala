@@ -1,5 +1,4 @@
-package io.chrisdavenport
-
+package io.chrisdavenport.ember
 
 import fs2._
 import fs2.concurrent._
@@ -15,14 +14,14 @@ import java.nio.channels.AsynchronousChannelGroup
 import java.util.concurrent.Executors
 import javax.net.ssl.SSLContext
 import org.http4s._
-import _root_.io.chrisdavenport.ember.codec.{Encoder, Parser}
-import _root_.io.chrisdavenport.ember.util.readWithTimeout
+import _root_.io.chrisdavenport.ember.core.{Encoder, Parser}
+import _root_.io.chrisdavenport.ember.core.Util.readWithTimeout
 
-package object ember {
+package object core {
 
   private val logger = org.log4s.getLogger
 
-  def server[F[_]: ConcurrentEffect: Clock](
+  def server[F[_]: ConcurrentEffect](
     bindAddress: InetSocketAddress,
     httpApp: HttpApp[F],
     ag: AsynchronousChannelGroup,
@@ -34,7 +33,7 @@ package object ember {
     receiveBufferSize: Int = 256 * 1024,
     maxHeaderSize: Int = 10 * 1024,
     requestHeaderReceiveTimeout: Duration = 5.seconds
-  ): Stream[F, Nothing] = {
+  )(implicit C: Clock[F]): Stream[F, Nothing] = {
     implicit val AG = ag
 
     // Termination Signal, if not present then does not terminate.
@@ -59,17 +58,17 @@ package object ember {
           case _ => (false, 0.millis)
         }
         SignallingRef[F, Boolean](initial).flatMap{timeoutSignal =>
-          readWithTimeout[F](socket, readDuration, timeoutSignal.get, receiveBufferSize)
-              .through(Parser.Request.parser(maxHeaderSize))
-              .take(1)
-              .compile
-              .lastOrError
-              .flatMap{req => 
-                Sync[F].delay(logger.debug(s"Request Processed $req")) *>
-                timeoutSignal.set(false).as(req)
-              }
-        }
+        C.realTime(MILLISECONDS).flatMap(now => 
+          Parser.Request.parser(maxHeaderSize)(
+            readWithTimeout[F](socket, now, readDuration, timeoutSignal.get, receiveBufferSize)
+          )
+            .flatMap{req => 
+              Sync[F].delay(logger.debug(s"Request Processed $req")) *>
+              timeoutSignal.set(false).as(req)
+            }
+        )}
       }
+
     Stream.eval(termSignal).flatMap(terminationSignal => 
     tcp.server[F](bindAddress)
       .map(connect => 
@@ -86,7 +85,6 @@ package object ember {
                 .covary[F]
                 .flatMap(Encoder.respToBytes[F])
                 .through(socket.writes())
-                .onFinalize(socket.endOfOutput)
                 .compile
                 .drain
                 .attempt
@@ -110,8 +108,8 @@ package object ember {
 
   def request[F[_]: ConcurrentEffect: ContextShift](
     request: Request[F]
-    , acg: AsynchronousChannelGroup
     , sslExecutionContext: ExecutionContext
+    , acg: AsynchronousChannelGroup
     , sslContext : SSLContext = { val ctx = SSLContext.getInstance("TLS"); ctx.init(null,null,null); ctx } 
     , chunkSize: Int = 32*1024
     , maxResponseHeaderSize: Int = 4096
@@ -119,58 +117,45 @@ package object ember {
   )(implicit T: Timer[F]): Resource[F, Response[F]] = {
     implicit val ACG : AsynchronousChannelGroup = acg
 
-    def onNoTimeout(socket: Socket[F]): F[Response[F]] = {
-      Encoder.reqToBytes(request)
-        .observe(_ => Stream.eval(Sync[F].delay(println("Chunk Written"))))
+    def onNoTimeout(socket: Socket[F]): F[Response[F]] = 
+      Parser.Response.parser(maxResponseHeaderSize)(
+        Encoder.reqToBytes(request)
         .to(socket.writes(None))
         .last
         .onFinalize(socket.endOfOutput)
         .flatMap { _ => socket.reads(chunkSize, None)}
-        .through(Parser.Response.parser[F](maxResponseHeaderSize))
-        .take(1)
-        .compile
-        .lastOrError
-    }
+      )
 
     def onTimeout(socket: Socket[F], fin: FiniteDuration): F[Response[F]] = for {
       start <- T.clock.realTime(MILLISECONDS)
       e <- Concurrent[F].race(
-        T.sleep(fin),
+        T.sleep(fin) *> T.clock.realTime(MILLISECONDS),
         Encoder.reqToBytes(request)
-        .observe(_ => Stream.eval(Sync[F].delay(println("Chunk Written"))))
         .to(socket.writes(Some(fin)))
         .last
         .onFinalize(socket.endOfOutput)
         .compile
         .drain
       ).flatMap{
-        _.leftMap(_ => new Throwable("Timeout!")).liftTo[F]
+        _.leftMap(now => EmberException.Timeout(start, now)).liftTo[F]
       }
 
       _ <- Sync[F].delay(println("Finished Writing Request"))
       timeoutSignal <- SignallingRef[F, Boolean](true)
       sent <- T.clock.realTime(MILLISECONDS)
       remains = fin - (sent - start).millis
-      resp <- Concurrent[F].race(
-        T.sleep(remains),
-        readWithTimeout(socket, remains, timeoutSignal.get, chunkSize)
-        .observe(_.through(fs2.text.utf8Decode[F]).evalMap(t => Sync[F].delay(println(s"Read - $t"))))
-        .through (Parser.Response.parser[F](maxResponseHeaderSize))
-        .take(1)
-        .compile
-        .lastOrError
-      ).flatMap{
-        _.leftMap(_ => new Throwable("Timeout!")).liftTo[F]
-      }
+      resp <- Parser.Response.parser[F](maxResponseHeaderSize)(
+          readWithTimeout(socket, start, remains, timeoutSignal.get, chunkSize)
+      )
       _ <- timeoutSignal.set(false).void
     } yield resp
 
     for {
-      initSocket <- Resource.liftF(codec.Shared.addressForRequest(request))
+      initSocket <- Resource.liftF(Shared.addressForRequest(request))
         .flatMap(io.tcp.client[F](_))
       _ <- Resource.liftF(Sync[F].delay(println("Initial Socket Received")))
       socket <- Resource.liftF{
-        if (request.uri.scheme.exists(_ === Uri.Scheme.https)) util.liftToSecure[F](sslExecutionContext, sslContext)(initSocket, true)
+        if (request.uri.scheme.exists(_ === Uri.Scheme.https)) Util.liftToSecure[F](sslExecutionContext, sslContext)(initSocket, true)
         else Applicative[F].pure(initSocket)
       }
       _ <- Resource.liftF(Sync[F].delay(println("Final Socket Received")))
