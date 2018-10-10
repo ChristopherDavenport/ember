@@ -16,7 +16,11 @@ object EmberClient {
 
   def simple[F[_]: ConcurrentEffect: Timer: ContextShift](
     sslExecutionContext: ExecutionContext
-  , sslContext : SSLContext = SSLContext.getDefault 
+  , sslContext : SSLContext = {
+      val ctx = SSLContext.getInstance("TLS")
+      ctx.init(null, null, null)
+      ctx
+    }
   , chunkSize: Int = 32*1024
   , maxResponseHeaderSize: Int = 4096
   , timeout: Duration = 5.seconds): Resource[F, Client[F]] = {
@@ -31,7 +35,11 @@ object EmberClient {
   def unopiniated[F[_]: ConcurrentEffect: Timer: ContextShift](
       sslExecutionContext: ExecutionContext
     , acg: AsynchronousChannelGroup
-    , sslContext : SSLContext = SSLContext.getDefault
+    , sslContext : SSLContext = {
+      val ctx = SSLContext.getInstance("TLS")
+      ctx.init(null, null, null)
+      ctx
+    }
     , chunkSize: Int = 32*1024
     , maxResponseHeaderSize: Int = 4096
     , timeout: Duration = 5.seconds

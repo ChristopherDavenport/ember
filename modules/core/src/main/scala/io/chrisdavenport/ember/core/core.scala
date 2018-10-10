@@ -130,12 +130,13 @@ package object core {
     def onTimeout(socket: Socket[F], fin: FiniteDuration): F[Response[F]] = for {
       start <- T.clock.realTime(MILLISECONDS)
       _ <- Sync[F].delay(println(s"Attempting to write Request $request"))
-      _ <- Encoder.reqToBytes(request)
+      _ <- (
+        Encoder.reqToBytes(request)
         .to(socket.writes(Some(fin)))
         .compile
-        .drain
-        .start
-      _ <- Sync[F].delay(println("Finished Writing Request"))
+        .drain >>
+        Sync[F].delay(println("Finished Writing Request"))
+      ).start
       timeoutSignal <- SignallingRef[F, Boolean](true)
       sent <- T.clock.realTime(MILLISECONDS)
       remains = fin - (sent - start).millis
