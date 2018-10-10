@@ -24,7 +24,7 @@ lazy val server = project.in(file("modules/server"))
 lazy val examples = project.in(file("modules/examples"))
   .settings(commonSettings)
   .settings(noPublish)
-  .dependsOn(core)
+  .dependsOn(core, server)
   .settings(
     name := projectName("examples"),
     libraryDependencies ++= Seq(
