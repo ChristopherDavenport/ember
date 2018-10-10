@@ -82,7 +82,6 @@ package object core {
                 .covary[F]
                 .flatMap(Encoder.respToBytes[F])
                 .through(socket.writes())
-                .onFinalize(socket.endOfOutput)
                 .compile
                 .drain
                 .attempt
