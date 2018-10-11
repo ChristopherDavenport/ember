@@ -1,4 +1,4 @@
-package io.chrisdavenport.ember
+package io.chrisdavenport.ember.server.internal
 
 import fs2._
 import fs2.concurrent._
@@ -18,11 +18,9 @@ import org.http4s._
 import _root_.io.chrisdavenport.ember.core.{Encoder, Parser}
 import _root_.io.chrisdavenport.ember.core.Util.readWithTimeout
 
-package object core {
 
-  private val logger = org.log4s.getLogger
-
-  def server[F[_]: ConcurrentEffect](
+object ServerHelpers {
+    def server[F[_]: ConcurrentEffect](
     bindAddress: InetSocketAddress,
     httpApp: HttpApp[F],
     ag: AsynchronousChannelGroup,
@@ -64,7 +62,7 @@ package object core {
             readWithTimeout[F](socket, now, readDuration, timeoutSignal.get, receiveBufferSize)
           )
             .flatMap{req => 
-              Sync[F].delay(logger.debug(s"Request Processed $req")) *>
+              // Sync[F].delay(logger.debug(s"Request Processed $req")) *>
               timeoutSignal.set(false).as(req)
             }
         )}
@@ -79,7 +77,7 @@ package object core {
               req <- socketReadRequest(socket, requestHeaderReceiveTimeout, receiveBufferSize)
               resp <- httpApp.run(req)
                 .handleError(onError)
-                .flatTap(resp => Sync[F].delay(logger.debug(s"Response Created $resp")))
+                // .flatTap(resp => Sync[F].delay(logger.debug(s"Response Created $resp")))
             } yield (req, resp)
             def send(request:Option[Request[F]], resp: Response[F]): F[Unit] = {
               Stream(resp)
@@ -105,70 +103,4 @@ package object core {
         .drain
     )
   }
-
-
-  def request[F[_]: ConcurrentEffect: ContextShift](
-    request: Request[F]
-    , sslExecutionContext: ExecutionContext
-    , acg: AsynchronousChannelGroup
-    , sslContext : SSLContext = SSLContext.getDefault
-    , chunkSize: Int = 32*1024
-    , maxResponseHeaderSize: Int = 4096
-    , timeout: Duration = 5.seconds
-  )(implicit T: Timer[F]): Resource[F, Response[F]] = {
-    implicit val ACG : AsynchronousChannelGroup = acg
-
-    def onNoTimeout(socket: Socket[F]): F[Response[F]] = 
-      Parser.Response.parser(maxResponseHeaderSize)(
-        Encoder.reqToBytes(request)
-        .to(socket.writes(None))
-        .last
-        .onFinalize(socket.endOfOutput)
-        .flatMap { _ => socket.reads(chunkSize, None)}
-      )
-
-    def onTimeout(socket: Socket[F], fin: FiniteDuration): F[Response[F]] = for {
-      start <- T.clock.realTime(MILLISECONDS)
-      // _ <- Sync[F].delay(println(s"Attempting to write Request $request"))
-      _ <- (
-        Encoder.reqToBytes(request)
-        .to(socket.writes(Some(fin)))
-        .compile
-        .drain //>>
-        // Sync[F].delay(println("Finished Writing Request"))
-      ).start
-      timeoutSignal <- SignallingRef[F, Boolean](true)
-      sent <- T.clock.realTime(MILLISECONDS)
-      remains = fin - (sent - start).millis
-      resp <- Parser.Response.parser[F](maxResponseHeaderSize)(
-          readWithTimeout(socket, start, remains, timeoutSignal.get, chunkSize)
-      )
-      _ <- timeoutSignal.set(false).void
-    } yield resp
-
-    for {
-      address <- Resource.liftF(Shared.addressForRequest(request))
-      initSocket <- io.tcp.client[F](address)
-      socket <- Resource.liftF{
-        if (request.uri.scheme.exists(_ === Uri.Scheme.https)) 
-          // Sync[F].delay(println("Elevating Socket to ssl")) *>
-          Util.liftToSecure[F](
-            sslExecutionContext, sslContext
-          )(
-            initSocket, true
-          )(
-            request.uri.authority.getOrElse(Uri.Authority()).host.value,
-            request.uri.authority.getOrElse(Uri.Authority()).port.getOrElse(443)
-          )
-        else Applicative[F].pure(initSocket)
-      }
-      // _ <- Resource.liftF(Sync[F].delay(println("Received Final Socket")))
-      resp <- timeout match {
-        case t: FiniteDuration => Resource.liftF(onTimeout(socket, t))
-        case _ => Resource.liftF(onNoTimeout(socket))
-      }
-    } yield resp
-
-  }
-
 }

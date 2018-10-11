@@ -15,8 +15,7 @@ import org.http4s._
 import Shared._
 import scala.concurrent.duration.MILLISECONDS
 import javax.net.ssl.SSLContext
-import spinoco.fs2.crypto.io.tcp.TLSSocket
-import scala.concurrent.ExecutionContext
+
 
 package object Util {
     /**
@@ -66,17 +65,5 @@ package object Util {
     }
     go(timeout)
   }
-
-  /** creates a function that lifts supplied socket to secure socket **/
-  def liftToSecure[F[_] : Concurrent : ContextShift](
-    sslES: ExecutionContext, sslContext: SSLContext
-  )(socket: Socket[F], clientMode: Boolean)(host: String, port: Int): F[Socket[F]] = {
-    for {
-      sslEngine <- Sync[F].delay(sslContext.createSSLEngine(host, port))
-      _ <- Sync[F].delay(sslEngine.setUseClientMode(clientMode))
-      secureSocket <- TLSSocket.instance[F](socket, sslEngine, sslES)
-      _ <- secureSocket.startHandshake
-    } yield secureSocket
-  }.widen
 
 }

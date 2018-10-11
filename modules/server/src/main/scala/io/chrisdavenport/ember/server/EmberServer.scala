@@ -11,7 +11,7 @@ import java.util.concurrent.Executors
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousChannelGroup
 
-import io.chrisdavenport.ember.core.server
+import io.chrisdavenport.ember.server.internal.ServerHelpers
 
 
 object EmberServer {
@@ -62,7 +62,7 @@ object EmberServer {
       shutdownSignal <- Resource.liftF(SignallingRef[F, Boolean](false))
       out <- Resource.make(
         Concurrent[F].start(
-          server(
+          ServerHelpers.server(
             bindAddress,
             httpApp,
             ag,
