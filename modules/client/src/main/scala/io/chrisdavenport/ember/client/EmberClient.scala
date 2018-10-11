@@ -10,25 +10,26 @@ import java.util.concurrent.Executors
 import java.nio.channels.AsynchronousChannelGroup
 import javax.net.ssl.SSLContext
 
-import io.chrisdavenport.ember.core.request
+import _root_.io.chrisdavenport.ember.client.internal.ClientHelpers
 
 object EmberClient {
 
   def simple[F[_]: ConcurrentEffect: Timer: ContextShift](
     sslExecutionContext: ExecutionContext
+  , acgFixedThreadPoolSize: Int = 100
   , sslContext : SSLContext = SSLContext.getDefault
   , chunkSize: Int = 32*1024
   , maxResponseHeaderSize: Int = 4096
   , timeout: Duration = 5.seconds): Resource[F, Client[F]] = {
     Resource.make(
       Sync[F].delay(
-        AsynchronousChannelGroup.withFixedThreadPool(100, Executors.defaultThreadFactory)
+        AsynchronousChannelGroup.withFixedThreadPool(acgFixedThreadPoolSize, Executors.defaultThreadFactory)
       )
     )(acg => Sync[F].delay(acg.shutdown))
-      .map(acg => unopiniated(sslExecutionContext, acg, sslContext, chunkSize, maxResponseHeaderSize, timeout))
+      .map(acg => unopiniatedSimple(sslExecutionContext, acg, sslContext, chunkSize, maxResponseHeaderSize, timeout))
   }
 
-  def unopiniated[F[_]: ConcurrentEffect: Timer: ContextShift](
+  def unopiniatedSimple[F[_]: ConcurrentEffect: Timer: ContextShift](
       sslExecutionContext: ExecutionContext
     , acg: AsynchronousChannelGroup
     , sslContext : SSLContext = SSLContext.getDefault
@@ -36,14 +37,23 @@ object EmberClient {
     , maxResponseHeaderSize: Int = 4096
     , timeout: Duration = 5.seconds
   ): Client[F] = Client[F](req => 
-    request(
+    ClientHelpers.requestToSocketWithKey[F](
       req,
       sslExecutionContext,
-      acg,
       sslContext,
-      chunkSize,
-      maxResponseHeaderSize,
-      timeout
+      acg
+    ).flatMap(s =>
+      Resource.liftF(
+        s.lock.withPermit(
+          ClientHelpers.request[F](
+            req,
+            s,
+            chunkSize,
+            maxResponseHeaderSize,
+            timeout
+          )
+        )
+      )
     )
   )
 }
