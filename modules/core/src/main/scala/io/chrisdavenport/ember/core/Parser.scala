@@ -2,7 +2,6 @@ package io.chrisdavenport.ember.core
 
 import cats._
 import cats.implicits._
-import io.chrisdavenport.ember
 import fs2._
 import scodec.bits.ByteVector
 import org.http4s._
@@ -11,8 +10,6 @@ import Shared._
 import scala.annotation.tailrec
 
 object Parser {
-  private val logger = org.log4s.getLogger
-
     /**
     * From the stream of bytes this extracts Http Header and body part.
     */

@@ -3,7 +3,6 @@ package io.chrisdavenport.ember.client
 import cats.implicits._
 import org.http4s.client.Client
 import cats.effect._
-import org.http4s._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import java.util.concurrent.Executors

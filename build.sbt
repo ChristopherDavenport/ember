@@ -28,7 +28,8 @@ lazy val client = project.in(file("modules/client"))
   .settings(
     name := projectName("client"),
     libraryDependencies ++= Seq(
-      "org.http4s"                  %% "http4s-client"              % http4sV
+      "org.http4s"                  %% "http4s-client"              % http4sV,
+      "com.spinoco"                 %% "fs2-crypto"                 % "0.4.0"
     )
   )
 
@@ -80,7 +81,6 @@ lazy val commonSettings = Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
     "co.fs2"                      %% "fs2-io"                     % fs2V,
-    "com.spinoco"                 %% "fs2-crypto"                 % "0.4.0",
     "org.http4s"                  %% "http4s-core"              % http4sV,
 
 

@@ -5,6 +5,8 @@ import fs2._
 import scodec.bits.ByteVector
 import Shared._
 
+import scala.util.control.NonFatal
+
 object ChunkedEncoding {
 
   /** From fs2-http
@@ -41,7 +43,7 @@ object ChunkedEncoding {
               if (remains == bv.size) Pull.output(Chunk.ByteVectorChunk(bv)) >> go(Left(ByteVector.empty), tl)
               else if (remains > bv.size) Pull.output(Chunk.ByteVectorChunk(bv)) >> go(Right(remains - bv.size), tl)
               else {
-                val (out,next) = bv.splitAt(remains.toInt)
+                val (out,next) = bv.splitAt(remains.toLong)
                 Pull.output(Chunk.ByteVectorChunk(out)) >> go(Left(ByteVector.empty), Stream.chunk(Chunk.ByteVectorChunk(next)) ++ tl)
               }
           }
@@ -49,7 +51,7 @@ object ChunkedEncoding {
       }
     }
 
-    go(Left(ByteVector.empty), _) stream
+    go(Left(ByteVector.empty), _).stream
   }
 
 
@@ -75,7 +77,7 @@ object ChunkedEncoding {
       if (parts.isEmpty) None
       else {
         try { Some(java.lang.Long.parseLong(parts(0).trim,16))}
-        catch { case t: Throwable => None }
+        catch { case NonFatal(_) => None }
       }
     }
   }

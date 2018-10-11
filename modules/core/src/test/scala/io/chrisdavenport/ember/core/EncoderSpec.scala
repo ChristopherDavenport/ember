@@ -5,9 +5,6 @@ import cats.implicits._
 import cats.effect.{IO, Sync}
 import org.http4s._
 
-import scala.concurrent._
-import scala.concurrent.duration._
-
 class EncoderSpec extends Specification {
   private object Helpers {
     def stripLines(s: String): String = s.replace("\r\n", "\n")

@@ -1,13 +1,10 @@
 package io.chrisdavenport.ember.core
 
 import org.specs2.mutable.Specification
-import cats.implicits._
 import cats.effect.{IO, Sync}
 import org.http4s._
 import fs2.Stream
 
-import scala.concurrent._
-import scala.concurrent.duration._
 
 class ParsingSpec extends Specification {
   private object Helpers {
