@@ -44,14 +44,12 @@ object EmberClient {
       acg
     ).flatMap(s =>
       Resource.liftF(
-        s.lock.withPermit(
-          ClientHelpers.request[F](
-            req,
-            s,
-            chunkSize,
-            maxResponseHeaderSize,
-            timeout
-          )
+        ClientHelpers.request[F](
+          req,
+          s,
+          chunkSize,
+          maxResponseHeaderSize,
+          timeout
         )
       )
     )
