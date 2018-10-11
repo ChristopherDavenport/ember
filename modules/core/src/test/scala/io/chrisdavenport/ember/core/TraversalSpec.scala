@@ -2,7 +2,6 @@ package io.chrisdavenport.ember.core
 
 import org.specs2.mutable.Specification
 import org.specs2.ScalaCheck
-import org.scalacheck._
 import cats.implicits._
 import cats.effect.IO
 import org.http4s._
@@ -51,6 +50,6 @@ class TraversalSpec extends Specification with ScalaCheck {
       .compile
       .foldMonoid
       .unsafeRunSync must_=== s
-    }.setArbitrary2(Arbitrary(Gen.alphaNumStr))
+    }
   }
 }
