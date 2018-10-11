@@ -1,21 +1,11 @@
 package io.chrisdavenport.ember.core
 
-import cats._
 import cats.effect._
 import cats.implicits._
 import fs2._
 import fs2.io.tcp.Socket
-import scodec.bits.ByteVector
 import scala.concurrent.duration._
-import scala.annotation.tailrec
-import org.http4s.Request
-import org.http4s.Method
-import org.http4s.Response
-import org.http4s._
-import Shared._
 import scala.concurrent.duration.MILLISECONDS
-import javax.net.ssl.SSLContext
-
 
 package object Util {
     /**

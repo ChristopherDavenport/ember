@@ -1,7 +1,5 @@
 package io.chrisdavenport.ember.example 
 
-import scala.concurrent.duration._
-import fs2._
 import cats.effect._
 import cats.implicits._
 import org.http4s._
@@ -10,7 +8,6 @@ import org.http4s.circe._
 import _root_.io.circe.Json
 import _root_.io.chrisdavenport.ember.client.EmberClient
 import scala.concurrent.ExecutionContext.global
-import javax.net.ssl.SSLContext
 
 object ClientExample extends IOApp{
 

@@ -4,12 +4,9 @@ import org.specs2.mutable.Specification
 import org.specs2.ScalaCheck
 import org.scalacheck._
 import cats.implicits._
-import cats.effect.{IO, Sync}
+import cats.effect.IO
 import org.http4s._
-import fs2.Stream
 
-import scala.concurrent._
-import scala.concurrent.duration._
 import Http4sArbitraries._
 
 class TraversalSpec extends Specification with ScalaCheck {

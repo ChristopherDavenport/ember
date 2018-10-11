@@ -1,7 +1,6 @@
 package io.chrisdavenport.ember.server
 
 import cats.implicits._
-import fs2.Stream
 import org.http4s.server.Server
 import cats.effect._
 import fs2.concurrent._

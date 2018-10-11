@@ -1,10 +1,5 @@
 package io.chrisdavenport.ember.example 
 
-import java.net.InetSocketAddress
-import java.nio.channels.AsynchronousChannelGroup
-import java.util.concurrent.Executors
-import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext
 import fs2._
 import cats.effect._
 import cats.implicits._
@@ -27,7 +22,7 @@ object ServerExample extends IOApp{
         service[IO]
       ))
       _ <- Stream.eval(IO.delay(println(s"Server Has Started at ${server.address}")))
-      _ <- Stream.never[IO]
+      _ <- Stream.never[IO] >> Stream.emit(())
     } yield ()
   }.compile.drain.as(ExitCode.Success)
 
@@ -51,7 +46,7 @@ object ServerExample extends IOApp{
           .repeat
           .take(100)
           .through(fs2.text.utf8Encode[F])
-        Ok(body).withContentType(org.http4s.headers.`Content-Type`(org.http4s.MediaType.text.plain))
+        Ok(body).map(_.withContentType(org.http4s.headers.`Content-Type`(org.http4s.MediaType.text.plain)))
     }.orNotFound
   }
 }

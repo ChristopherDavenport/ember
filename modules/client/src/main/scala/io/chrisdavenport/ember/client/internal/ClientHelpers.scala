@@ -2,7 +2,6 @@ package io.chrisdavenport.ember.client.internal
 
 import fs2._
 import fs2.concurrent._
-import fs2.io.tcp
 import fs2.io.tcp._
 import cats._
 import cats.effect._
@@ -13,11 +12,10 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousChannelGroup
-import java.util.concurrent.Executors
 import javax.net.ssl.SSLContext
 import org.http4s._
 import org.http4s.client.RequestKey
-import _root_.io.chrisdavenport.ember.core.{Encoder, EmberException, Parser, Shared}
+import _root_.io.chrisdavenport.ember.core.{Encoder,Parser}
 import _root_.io.chrisdavenport.ember.core.Util.readWithTimeout
 import spinoco.fs2.crypto.io.tcp.TLSSocket
 import scala.concurrent.ExecutionContext
