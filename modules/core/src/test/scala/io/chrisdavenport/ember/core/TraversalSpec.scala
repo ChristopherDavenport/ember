@@ -19,14 +19,16 @@ class TraversalSpec extends Specification with ScalaCheck {
       end.headers must_=== req.headers
     }.pendingUntilFixed
 
-    "preserve method" >> prop { req: Request[IO] =>
+    "preserve method with known uri" >> prop { req: Request[IO] =>
+      val newReq = req
+        .withUri(Uri.unsafeFromString("http://www.google.com"))
 
       val end = Parser.Request.parser[IO](Int.MaxValue)(
-        Encoder.reqToBytes[IO](req)
+        Encoder.reqToBytes[IO](newReq)
       ).unsafeRunSync
 
       end.method must_=== req.method
-    }.pendingUntilFixed
+    }
 
     "preserve uri.scheme" >> prop { req: Request[IO] =>
       val end = Parser.Request.parser[IO](Int.MaxValue)(
@@ -42,13 +44,13 @@ class TraversalSpec extends Specification with ScalaCheck {
         .withUri(Uri.unsafeFromString("http://www.google.com"))
         .withEntity(s)
       val end = Parser.Request.parser[IO](Int.MaxValue)(
-        Encoder.reqToBytes[IO](req)
+        Encoder.reqToBytes[IO](newReq)
       ).unsafeRunSync
 
       end.body.through(fs2.text.utf8Decode)
       .compile
       .foldMonoid
       .unsafeRunSync must_=== s
-    }.setArbitrary2(Arbitrary(Gen.alphaNumStr)).pendingUntilFixed
+    }.setArbitrary2(Arbitrary(Gen.alphaNumStr))
   }
 }
