@@ -31,17 +31,16 @@ object Shared {
       host <- req.uri.host.toRight(EmberException.IncompleteClientRequest("Host")).liftTo[F]
       socketAddress <- addressForComponents(scheme, host, req.uri.port)
     } yield socketAddress
-    
+  
+  // https://github.com/http4s/http4s/blob/master/blaze-client/src/main/scala/org/http4s/client/blaze/Http1Support.scala#L86
   def addressForComponents[F[_] : Sync](scheme: Uri.Scheme, host: Uri.Host, port: Option[Int]): F[InetSocketAddress] = Sync[F].suspend {
-    port.orElse {
+    val finalPort = port.getOrElse {
       scheme match {
-        case Uri.Scheme.https => 443.some
-        case Uri.Scheme.http => 80.some
-        case _ => Option.empty[Int]
+        case Uri.Scheme.https => 443
+        case _ => 80
       }
-    }.toRight(EmberException.IncompleteClientRequest("Port"))
-    .liftTo[F]
-    .map(new InetSocketAddress(host.value, _))
+    }
+    Sync[F].delay(new InetSocketAddress(host.value, finalPort))
   }
 }
 

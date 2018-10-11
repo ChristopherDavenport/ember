@@ -80,7 +80,9 @@ lazy val commonSettings = Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
     "co.fs2"                      %% "fs2-io"                     % fs2V,
-    "org.http4s"                  %% "http4s-core"                % http4sV,
+    "com.spinoco"                 %% "fs2-crypto"                 % "0.4.0",
+    "org.http4s"                  %% "http4s-core"              % http4sV,
+
 
     "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
     "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test,
