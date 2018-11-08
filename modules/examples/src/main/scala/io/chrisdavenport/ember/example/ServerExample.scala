@@ -4,6 +4,7 @@ import fs2._
 import cats.effect._
 import cats.implicits._
 import org.http4s._
+import org.http4s.implicits._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.circe._
 import _root_.io.circe._

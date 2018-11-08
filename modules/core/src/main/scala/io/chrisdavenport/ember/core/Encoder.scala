@@ -10,8 +10,6 @@ import Shared._
 object Encoder {
 
   def respToBytes[F[_]: Sync](resp: Response[F]): Stream[F, Byte] = {
-    val statusInstances = new StatusInstances{}
-    import statusInstances._
     val headerStrings : List[String] = resp.headers.map(h => h.name + ": " + h.value).toList
 
     val initSection = Stream(show"${resp.httpVersion} ${resp.status}") ++ Stream.emits(headerStrings)
