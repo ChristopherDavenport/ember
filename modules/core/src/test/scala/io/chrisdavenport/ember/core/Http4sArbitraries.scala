@@ -1,7 +1,7 @@
 package io.chrisdavenport.ember.core
 
 import cats._
-import cats.data.NonEmptyList
+import cats.data.{NonEmptyList, Chain}
 import cats.effect.{Effect, IO}
 import cats.effect.laws.discipline.arbitrary._
 import cats.effect.laws.util.TestContext
@@ -308,7 +308,7 @@ private[core] object Http4sArbitraries extends LockedTraits {
     // new String("\ufffe".getBytes("UTF-16"), "UTF-16") != "\ufffe".
     // Ain't nobody got time for that.
     arbitrary[Map[String, Seq[String]]]
-      .map(UrlForm.apply)
+      .map(a => UrlForm(a.mapValues(Chain.fromSeq)))
       .suchThat(!_.toString.contains('\ufffe'))
   }
 
