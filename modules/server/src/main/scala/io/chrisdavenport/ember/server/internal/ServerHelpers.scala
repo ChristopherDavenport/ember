@@ -14,7 +14,7 @@ import _root_.io.chrisdavenport.ember.core.{Encoder, Parser}
 import _root_.io.chrisdavenport.ember.core.Util.readWithTimeout
 
 object ServerHelpers {
-    def server[F[_]: ConcurrentEffect](
+    def server[F[_]: ConcurrentEffect : ContextShift](
     bindAddress: InetSocketAddress,
     httpApp: HttpApp[F],
     ag: AsynchronousChannelGroup,
@@ -73,7 +73,7 @@ object ServerHelpers {
       }
 
     Stream.eval(termSignal).flatMap(terminationSignal => 
-    tcp.server[F](bindAddress)
+    tcp.Socket.server[F](bindAddress)
       .map(connect => 
         Stream.eval(
           connect.use{socket =>
