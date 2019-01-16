@@ -60,6 +60,4 @@ trait LockedTraits {
 
   lazy val ctlChar: List[Char] = ('\u007F' +: ('\u0000' to '\u001F')).toList
 
-
-
 }

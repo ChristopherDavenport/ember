@@ -41,7 +41,7 @@ object ClientHelpers {
     val requestKey = RequestKey.fromRequest(request)
     for {
       address <- Resource.liftF(getAddress(requestKey))
-      initSocket <- io.tcp.client[F](address)
+      initSocket <- io.tcp.Socket.client[F](address)
       socket <- Resource.liftF{
         if (request.uri.scheme.exists(_ === Uri.Scheme.https)) 
           // Sync[F].delay(println("Elevating Socket to ssl")) *>

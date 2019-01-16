@@ -15,7 +15,7 @@ import io.chrisdavenport.ember.server.internal.ServerHelpers
 
 object EmberServer {
 
-  def impl[F[_]: ConcurrentEffect: Clock](
+  def impl[F[_]: ConcurrentEffect: Clock : ContextShift](
     host: String,
     port: Int,
     httpApp: HttpApp[F],
@@ -45,7 +45,7 @@ object EmberServer {
     )
   } yield out
 
-  def unopinionated[F[_]: ConcurrentEffect: Clock](
+  def unopinionated[F[_]: ConcurrentEffect: Clock: ContextShift](
     bindAddress: InetSocketAddress,
     httpApp: HttpApp[F],
     ag: AsynchronousChannelGroup,
