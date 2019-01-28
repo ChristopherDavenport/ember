@@ -58,7 +58,7 @@ val circeV = "0.11.1"
 
 val specs2V = "4.4.1"
 val disciplineV = "0.11.0"
-val scShapelessV = "1.1.6"
+val scShapelessV = "1.1.8"
 
 val logbackClassicV = "1.2.3"
 
