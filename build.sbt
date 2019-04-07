@@ -57,7 +57,7 @@ val http4sV = "0.20.0-M5"
 val circeV = "0.11.1"
 
 val specs2V = "4.5.1"
-val disciplineV = "0.11.0"
+val disciplineV = "0.11.1"
 val scShapelessV = "1.1.8"
 
 val logbackClassicV = "1.2.3"
