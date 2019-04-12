@@ -51,9 +51,9 @@ lazy val examples = project.in(file("modules/examples"))
   )
 
 val catsV = "1.6.0"
-val catsEffectV = "1.1.0"
-val fs2V = "1.0.1"
-val http4sV = "0.20.0-M5"
+val catsEffectV = "1.2.0"
+val fs2V = "1.0.4"
+val http4sV = "0.20.0-RC1"
 val circeV = "0.11.1"
 
 val specs2V = "4.5.1"
@@ -70,18 +70,18 @@ lazy val contributors = Seq(
 lazy val commonSettings = Seq(
   organization := "io.chrisdavenport",
 
-  scalaVersion := "2.12.7",
+  scalaVersion := "2.12.8",
   crossScalaVersions := Seq(scalaVersion.value, "2.11.12"),
   scalacOptions += "-Yrangepos",
 
-  addCompilerPlugin("com.olegpy" %% "better-monadic-for" % "0.2.4"),
-  addCompilerPlugin("org.spire-math" % "kind-projector" % "0.9.9" cross CrossVersion.binary),
+  addCompilerPlugin("com.olegpy"    %% "better-monadic-for" % "0.3.0-M4"),
+  addCompilerPlugin("org.typelevel" %  "kind-projector" % "0.10.0" cross CrossVersion.binary),
 
   libraryDependencies ++= Seq(
     "org.typelevel"               %% "cats-core"                  % catsV,
     "org.typelevel"               %% "cats-effect"                % catsEffectV,
     "co.fs2"                      %% "fs2-io"                     % fs2V,
-    "org.http4s"                  %% "http4s-core"              % http4sV,
+    "org.http4s"                  %% "http4s-core"                % http4sV,
 
 
     "org.specs2"                  %% "specs2-core"                % specs2V       % Test,

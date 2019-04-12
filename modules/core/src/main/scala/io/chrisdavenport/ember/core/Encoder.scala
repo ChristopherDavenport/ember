@@ -10,7 +10,7 @@ import Shared._
 object Encoder {
 
   def respToBytes[F[_]: Sync](resp: Response[F]): Stream[F, Byte] = {
-    val headerStrings : List[String] = resp.headers.map(h => h.name + ": " + h.value).toList
+    val headerStrings : List[String] = resp.headers.toList.map(h => h.name + ": " + h.value).toList
 
     val initSection = Stream(show"${resp.httpVersion} ${resp.status}") ++ Stream.emits(headerStrings)
 
@@ -27,11 +27,9 @@ object Encoder {
     val requestLine = show"${req.method} ${req.uri.renderString} ${req.httpVersion}"
 
     val finalHeaders = req.headers ++ 
-      req.uri.authority
-        .toSeq
-        .flatMap(auth => Headers(Header("Host", auth.renderString)))
+      req.uri.authority.fold(Headers.of())(auth => Headers.of(Header("Host", auth.renderString)))
 
-    val headerStrings : List[String] = finalHeaders.map(h => h.name + ": " + h.value).toList
+    val headerStrings : List[String] = finalHeaders.toList.map(h => h.name + ": " + h.value).toList
 
     val initSection = Stream(requestLine) ++ Stream.emits(headerStrings)
 
