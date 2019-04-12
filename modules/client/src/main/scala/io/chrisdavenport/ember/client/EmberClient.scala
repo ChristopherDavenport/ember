@@ -1,6 +1,5 @@
 package io.chrisdavenport.ember.client
 
-import cats.implicits._
 import org.http4s.client.Client
 import cats.effect._
 import scala.concurrent.ExecutionContext

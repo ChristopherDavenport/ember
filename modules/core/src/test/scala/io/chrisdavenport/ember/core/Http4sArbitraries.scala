@@ -477,7 +477,7 @@ private[core] object Http4sArbitraries extends LockedTraits {
     }
 
   implicit val http4sTestingArbitraryForHeaders: Arbitrary[Headers] =
-    Arbitrary(listOf(arbitrary[Header]).map(Headers(_: _*)))
+    Arbitrary(listOf(arbitrary[Header]).map(Headers.of(_: _*)))
 
   implicit val http4sTestingArbitraryForServerSentEvent: Arbitrary[ServerSentEvent] = {
     import ServerSentEvent._

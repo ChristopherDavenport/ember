@@ -56,12 +56,12 @@ object Parser {
     headerO match {
       case Right((lineBV, rest)) =>
         val headerO = generateHeaderForLine(lineBV)
-        val newHeaders = acc ++ headerO
+        val newHeaders = acc ++ headerO.map(Headers.of(_)).foldMap(identity)
         // println(s"Generate Headers Header0 = $headerO")
         generateHeaders(rest)(newHeaders)
       case Left(bv) => 
         val headerO = generateHeaderForLine(bv)
-        headerO ++ acc
+        headerO.map(Headers.of(_)).foldMap(identity) ++ acc
     }
     
 

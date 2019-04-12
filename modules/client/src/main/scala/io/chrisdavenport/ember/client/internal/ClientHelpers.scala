@@ -71,7 +71,7 @@ object ClientHelpers {
     def onNoTimeout(socket: Socket[F]): F[Response[F]] = 
       Parser.Response.parser(maxResponseHeaderSize)(
         Encoder.reqToBytes(request)
-        .to(socket.writes(None))
+        .through(socket.writes(None))
         .last
         .onFinalize(socket.endOfOutput)
         .flatMap { _ => socket.reads(chunkSize, None)}
@@ -82,7 +82,7 @@ object ClientHelpers {
       // _ <- Sync[F].delay(println(s"Attempting to write Request $request"))
       _ <- (
         Encoder.reqToBytes(request)
-        .to(socket.writes(Some(fin)))
+        .through(socket.writes(Some(fin)))
         .compile
         .drain //>>
         // Sync[F].delay(println("Finished Writing Request"))
