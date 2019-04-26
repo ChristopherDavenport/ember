@@ -5,7 +5,7 @@ import fs2.concurrent._
 import fs2.io.tcp._
 import cats._
 import cats.effect._
-import cats.effect.concurrent.Semaphore
+// import cats.effect.concurrent.Semaphore
 import cats.effect.implicits._
 import cats.implicits._
 import scala.concurrent.ExecutionContext
@@ -25,10 +25,9 @@ object ClientHelpers {
 
   // lock is a semaphore for this socket. You should use a permit
   // to do anything with this.
-  case class RequestKeySocket[F[_]](
+  final case class RequestKeySocket[F[_]](
     socket: Socket[F],
-    requestKey: RequestKey,
-    lock: Semaphore[F]
+    requestKey: RequestKey
   )
 
   def requestToSocketWithKey[F[_]: ConcurrentEffect: Timer: ContextShift](
@@ -69,8 +68,7 @@ object ClientHelpers {
           )
         else Applicative[F].pure(initSocket)
       }
-      lock <- Resource.liftF(Semaphore(1))
-    } yield RequestKeySocket(socket, requestKey, lock)
+    } yield RequestKeySocket(socket, requestKey)
 
   }
 
@@ -85,11 +83,12 @@ object ClientHelpers {
 
     def onNoTimeout(socket: Socket[F]): F[Response[F]] = 
       Parser.Response.parser(maxResponseHeaderSize)(
-        Encoder.reqToBytes(request)
-        .through(socket.writes(None))
-        .last
-        .onFinalize(socket.endOfOutput)
-        .flatMap { _ => socket.reads(chunkSize, None)}
+        socket.reads(chunkSize, None)
+          .concurrently(
+            Encoder.reqToBytes(request)
+              .through(socket.writes(None))
+              .drain
+          )
       )
 
     def onTimeout(socket: Socket[F], fin: FiniteDuration): F[Response[F]] = for {
@@ -111,12 +110,10 @@ object ClientHelpers {
       _ <- timeoutSignal.set(false).void
     } yield resp
 
-    requestKeySocket.lock.withPermit(
-      timeout match {
-        case t: FiniteDuration => onTimeout(requestKeySocket.socket, t)
-        case _ => onNoTimeout(requestKeySocket.socket)
-      }
-    )
+    timeout match {
+      case t: FiniteDuration => onTimeout(requestKeySocket.socket, t)
+      case _ => onNoTimeout(requestKeySocket.socket)
+    }
   }
 
 
