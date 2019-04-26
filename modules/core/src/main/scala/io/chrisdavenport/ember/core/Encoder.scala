@@ -24,10 +24,10 @@ object Encoder {
 
   def reqToBytes[F[_]: Sync](req: Request[F]): Stream[F, Byte] = {
     // Request-Line   = Method SP Request-URI SP HTTP-Version CRLF
-    val requestLine = show"${req.method} ${req.uri.path} ${req.httpVersion}"
+    val requestLine = show"${req.method} ${req.uri.renderString} ${req.httpVersion}"
 
-    val finalHeaders = req.headers ++ 
-      req.uri.authority.fold(Headers.of())(auth => Headers.of(Header("Host", auth.renderString)))
+    val finalHeaders =
+      req.uri.authority.fold(Headers.of())(auth => Headers.of(Header("Host", auth.renderString))) ++ req.headers
 
     val headerStrings : List[String] = finalHeaders.toList.map(h => h.name + ": " + h.value).toList
 
@@ -36,7 +36,7 @@ object Encoder {
     val body = Alternative[Option].guard(req.isChunked)
       .fold(req.body)(_ => req.body.through(ChunkedEncoding.encode[F]))
 
-    initSection.covary[F].intersperse("\r\n").through(text.utf8Encode) ++ 
+    initSection.covary[F].intersperse("\r\n").through(text.utf8Encode) ++
     Stream.chunk(Chunk.ByteVectorChunk(`\r\n\r\n`)) ++
     body
   }
