@@ -18,48 +18,47 @@ import _root_.io.chrisdavenport.ember.client.internal.ClientHelpers
 
 object EmberClient {
 
-  def simple[F[_]: ConcurrentEffect: Timer: ContextShift](
-    sslExecutionContext: ExecutionContext
-  , acgFixedThreadPoolSize: Int = 100
-  , sslContext : SSLContext = SSLContext.getDefault
-  , chunkSize: Int = 32*1024
-  , maxResponseHeaderSize: Int = 4096
-  , timeout: Duration = 5.seconds): Resource[F, Client[F]] = {
-    Resource.make(
+  object Defaults {
+    def sslExecutionContext: ExecutionContext = ExecutionContext.global
+    val acgFixedThreadPoolSize: Int = 100
+    def asynchronousChannelGroup[F[_]: Sync]: Resource[F, AsynchronousChannelGroup] = Resource.make(
       Sync[F].delay(
         AsynchronousChannelGroup.withFixedThreadPool(acgFixedThreadPoolSize, Executors.defaultThreadFactory)
       )
     )(acg => Sync[F].delay(acg.shutdown))
-      .map(acg => unopiniatedSimple(sslExecutionContext, acg, sslContext, chunkSize, maxResponseHeaderSize, timeout))
+    def sslContext[F[_]: Sync]: F[SSLContext] = Sync[F].delay(SSLContext.getDefault)
+    val chunkSize: Int = 32 * 1024
+    val maxResponseHeaderSize: Int = 4096
+    val timeout: Duration = 5.seconds
+
+    // Pool Settings
+    val maxPerKey = 256
+    val maxTotal = 256
   }
 
-  def pool[F[_]: ConcurrentEffect: Timer: ContextShift](
-    sslExecutionContext: ExecutionContext
-  , acgFixedThreadPoolSize: Int = 100
-  , maxTotal: Int = 256
-  , maxPerKey: Int = 256
-  , sslContext : SSLContext = SSLContext.getDefault
-  , chunkSize: Int = 32*1024
-  , maxResponseHeaderSize: Int = 4096
-  , timeout: Duration = 5.seconds
-  , logger: Option[Logger[F]] = None): Resource[F, (KeyPool[F, RequestKey, (ClientHelpers.RequestKeySocket[F], F[Unit])], Client[F])] = {
-    Resource.make(
-      Sync[F].delay(
-        AsynchronousChannelGroup.withFixedThreadPool(acgFixedThreadPoolSize,
-          Executors.defaultThreadFactory
-        )
-      )
-    )(acg => Sync[F].delay(acg.shutdown))
-      .flatMap(acg => unopinionatedPool[F](sslExecutionContext, acg, maxTotal, maxPerKey, sslContext, chunkSize, maxResponseHeaderSize, timeout, logger))
+  // Simple
+
+  def defaultSimpleClient[F[_]: ConcurrentEffect: Timer: ContextShift]: Resource[F, Client[F]] = {
+    for {
+      sslContext <- Resource.liftF(Defaults.sslContext[F])
+      acg <- Defaults.asynchronousChannelGroup[F]
+    } yield simpleClient(
+      Defaults.sslExecutionContext,
+      acg,
+      sslContext,
+      Defaults.chunkSize,
+      Defaults.maxResponseHeaderSize,
+      Defaults.timeout
+    )
   }
 
-  def unopiniatedSimple[F[_]: ConcurrentEffect: Timer: ContextShift](
+  def simpleClient[F[_]: ConcurrentEffect: Timer: ContextShift](
       sslExecutionContext: ExecutionContext
     , acg: AsynchronousChannelGroup
-    , sslContext : SSLContext = SSLContext.getDefault
-    , chunkSize: Int = 32*1024
-    , maxResponseHeaderSize: Int = 4096
-    , timeout: Duration = 5.seconds
+    , sslContext : SSLContext
+    , chunkSize: Int
+    , maxResponseHeaderSize: Int
+    , timeout: Duration
   ): Client[F] = Client[F](req =>
     ClientHelpers.requestToSocketWithKey[F](
       req,
@@ -79,43 +78,66 @@ object EmberClient {
     )
   )
 
-  def unopinionatedPool[F[_]: ConcurrentEffect: Timer: ContextShift](
+  // Pooled
+
+  def defaultPooledClient[F[_]: ConcurrentEffect: Timer: ContextShift]: Resource[F,  Client[F]] = {
+    val logger_ = Slf4jLogger.getLogger[F]
+    for {
+      sslContext <- Resource.liftF(Defaults.sslContext[F])
+      acg <- Defaults.asynchronousChannelGroup
+      pool <- connectionPool(
+        Defaults.sslExecutionContext,
+        acg,
+        sslContext,
+        Defaults.maxTotal,
+        Defaults.maxPerKey,
+        logger_
+      )
+    } yield fromConnectionPool(
+      pool,
+      logger_,
+      Defaults.chunkSize,
+      Defaults.maxResponseHeaderSize,
+      Defaults.timeout
+    )
+  }
+
+  def connectionPool[F[_]: ConcurrentEffect: Timer: ContextShift](
     sslExecutionContext: ExecutionContext
     , acg: AsynchronousChannelGroup
-    , maxTotal: Int = 256
-    , maxPerKey: Int = 256
-    , sslContext : SSLContext = SSLContext.getDefault
-    , chunkSize: Int = 32*1024
-    , maxResponseHeaderSize: Int = 4096
-    , timeout: Duration = 5.seconds
-    , logger: Option[Logger[F]] = None
-  ): Resource[F, (KeyPool[F, RequestKey, (ClientHelpers.RequestKeySocket[F], F[Unit])], Client[F])] = {
-    val logger_ : Logger[F] = logger.getOrElse(Slf4jLogger.getLogger[F])
-    for {
-      pool <- KeyPool.create[F, RequestKey, (ClientHelpers.RequestKeySocket[F], F[Unit])](
+    , sslContext : SSLContext
+    , maxTotal: Int
+    , maxPerKey: Int
+    , logger: Logger[F]
+  ): Resource[F, KeyPool[F, RequestKey, (ClientHelpers.RequestKeySocket[F], F[Unit])]] = {
+    KeyPool.create[F, RequestKey, (ClientHelpers.RequestKeySocket[F], F[Unit])](
         {requestKey: RequestKey => ClientHelpers.requestKeyToSocketWithKey[F](
         requestKey,
         sslExecutionContext,
         sslContext,
         acg
-        ).allocated},
-        {case (r, (_, shutdown)) =>  logger_.trace(s"Shutting Down Connection - RequestKey: ${r}") >> shutdown},
+        ).allocated <* logger.trace(s"Created Connection - RequestKey: ${requestKey}")},
+        {case (r, (_, shutdown)) =>  logger.trace(s"Shutting Down Connection - RequestKey: ${r}") >> shutdown},
         DontReuse,
         30000000000L,
         maxPerKey,
         maxTotal,
         {_ : Throwable => Applicative[F].unit}
       )
-    // _ <- Resource.make(logger_.debug("Starting Reporter") >> Concurrent[F].start{
-    //   def action : F[Unit] = pool.state.flatMap{ state => logger_.trace(s"Current Pool State - $state")} >> Timer[F].sleep(0.2.seconds) >> action
-    //   action
-    // })(_ => Sync[F].unit )
-    } yield {
-      val client = Client[F](request =>
+  }
+
+  def fromConnectionPool[F[_]: ConcurrentEffect: Timer: ContextShift](
+    pool: KeyPool[F, RequestKey, (ClientHelpers.RequestKeySocket[F], F[Unit])]
+    , logger: Logger[F]
+    , chunkSize: Int
+    , maxResponseHeaderSize: Int
+    , timeout: Duration
+  ): Client[F] = {
+      Client[F](request =>
         pool.take(RequestKey.fromRequest(request))
           .evalMap{ m =>
             pool.state.flatMap{poolState =>
-              logger_.trace(
+              logger.trace(
                 s"Connection Taken - Key: ${m.resource._1.requestKey} - Reused: ${m.isReused} - PoolState: $poolState"
               )
             } >>
@@ -141,8 +163,6 @@ object EmberClient {
             )
           }
       )
-      (pool, client)
-    }
   }
 }
 
