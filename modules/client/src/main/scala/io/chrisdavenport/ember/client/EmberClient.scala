@@ -114,12 +114,11 @@ object EmberClient {
       val client = Client[F](request =>
         pool.take(RequestKey.fromRequest(request))
           .evalMap{ m =>
-              pool.state.flatMap{poolState =>
-                logger_.trace(
-                  s"Connection Taken - Key: ${m.resource._1.requestKey} - Reused: ${m.isReused} - PoolState: $poolState"
-                )
-              } >>
-            // m.canBeReused.set(DontReuse) >>
+            pool.state.flatMap{poolState =>
+              logger_.trace(
+                s"Connection Taken - Key: ${m.resource._1.requestKey} - Reused: ${m.isReused} - PoolState: $poolState"
+              )
+            } >>
             ClientHelpers.request[F](
               request,
               m.resource._1,
