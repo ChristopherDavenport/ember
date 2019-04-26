@@ -45,9 +45,9 @@ class EncoderSpec extends Specification {
         .withEntity("Hello World!")
       val expected = 
       """POST http://www.google.com HTTP/1.1
+      |Host: www.google.com
       |Content-Length: 12
       |Content-Type: text/plain; charset=UTF-8
-      |Host: www.google.com
       |
       |Hello World!""".stripMargin
 
