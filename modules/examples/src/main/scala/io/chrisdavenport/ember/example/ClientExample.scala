@@ -15,15 +15,19 @@ object ClientExample extends IOApp{
     val githubReq = Request[IO](Method.GET, Uri.unsafeFromString("http://christopherdavenport.github.io/"))
     val googleReq = Request[IO](Method.GET, Uri.unsafeFromString("https://www.google.com/"))
     val randomReq = Request[IO](Method.GET, Uri.unsafeFromString("https://icanhazdadjoke.com/"))
-    EmberClient.simple[IO](global)
+    EmberClient.pool[IO](global)
       .use( client => 
         // Not Https
         client.fetch(githubReq)(resp => 
           Sync[IO].delay(println(s"My Github - $resp"))
-        ) *> 
+        ) >> 
         client.fetch(googleReq)(resp => 
-          Sync[IO].delay(println(s"Google - $resp"))
-        ) *>
+          Sync[IO].delay(println(s"Google - $resp")) >>
+          resp.body.compile.drain
+        ) >>
+        client.fetch(googleReq)(resp => 
+          Sync[IO].delay(println(s"Google 2 - $resp"))
+        ) >>
         client.expect[Json](randomReq).flatMap{ random => 
           Sync[IO].delay(println(s"Random - $random"))
         }

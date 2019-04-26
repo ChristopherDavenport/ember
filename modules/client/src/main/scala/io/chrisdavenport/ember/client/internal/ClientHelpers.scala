@@ -36,14 +36,28 @@ object ClientHelpers {
     sslExecutionContext : ExecutionContext,
     sslContext: SSLContext,
     acg: AsynchronousChannelGroup
-  ) = {
-    implicit val ACG: AsynchronousChannelGroup = acg
+  ): Resource[F, RequestKeySocket[F]] = {
     val requestKey = RequestKey.fromRequest(request)
+    requestKeyToSocketWithKey[F](
+      requestKey,
+      sslExecutionContext,
+      sslContext,
+      acg
+    )
+  }
+
+  def requestKeyToSocketWithKey[F[_]: ConcurrentEffect: Timer: ContextShift](
+    requestKey: RequestKey,
+    sslExecutionContext : ExecutionContext,
+    sslContext: SSLContext,
+    acg: AsynchronousChannelGroup
+  ): Resource[F, RequestKeySocket[F]] = {
+    implicit val ACG: AsynchronousChannelGroup = acg
     for {
       address <- Resource.liftF(getAddress(requestKey))
       initSocket <- io.tcp.Socket.client[F](address)
       socket <- Resource.liftF{
-        if (request.uri.scheme.exists(_ === Uri.Scheme.https)) 
+        if (requestKey.scheme === Uri.Scheme.https)
           // Sync[F].delay(println("Elevating Socket to ssl")) *>
           liftToSecure[F](
             sslExecutionContext, sslContext
@@ -56,7 +70,8 @@ object ClientHelpers {
         else Applicative[F].pure(initSocket)
       }
       lock <- Resource.liftF(Semaphore(1))
-    } yield RequestKeySocket(socket, RequestKey.fromRequest(request), lock)
+    } yield RequestKeySocket(socket, requestKey, lock)
+
   }
 
 
