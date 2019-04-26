@@ -116,7 +116,7 @@ object EmberClient {
           .evalMap{ m =>
               pool.state.flatMap{poolState =>
                 logger_.trace(
-                  s"Connection Gotten - PoolState: $poolState - Key: ${m.resource._1.requestKey} - Reused: ${m.isReused}"
+                  s"Connection Taken - Key: ${m.resource._1.requestKey} - Reused: ${m.isReused} - PoolState: $poolState"
                 )
               } >>
             // m.canBeReused.set(DontReuse) >>
