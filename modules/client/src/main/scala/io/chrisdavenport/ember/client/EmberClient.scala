@@ -1,6 +1,6 @@
 package io.chrisdavenport.ember.client
 
-import cats._
+// import cats._
 import org.http4s.client._
 import cats.effect._
 import cats.implicits._
@@ -90,26 +90,41 @@ object EmberClient {
       sslContext,
       acg
       ).allocated},
-      {case (_, (_, shutdown)) => shutdown},
-      Reuse,
-      30000000000L,
+      {case (r, (a, shutdown)) =>  Sync[F].delay(println(s"Shutting Down - ${r} - ${a}")) >> shutdown},
+      DontReuse,
+      100000L,
+      // 30000000000L,
       maxPerKey,
       maxTotal,
-      {_ => Applicative[F].unit}
+      {t : Throwable => Sync[F].delay(println(s"Failed To Clean up $t"))}
     )
-  } yield Client[F](request => 
+  } yield Client[F](request =>
     pool.take(RequestKey.fromRequest(request))
-      .evalMap( m => 
+      .evalMap{ m =>
+        m.canBeReused.modify(old => (DontReuse, old)).flatMap{ previousState =>
+          pool.state.flatMap{poolState =>
+            Sync[F].delay(
+              println(s"Connection Gotten - PoolState: $poolState - Connection: ${m.resource._1.requestKey} - ${m.isReused} - reuse state was $previousState")
+            )
+          }
+        } >>
+        // m.canBeReused.set(DontReuse) >>
         ClientHelpers.request[F](
           request,
           m.resource._1,
           chunkSize,
           maxResponseHeaderSize,
           timeout
-        ).onError{ case _ => 
-          m.canBeReused.set(DontReuse)
-        }
-      )
+        ).map(r =>
+          r.copy(body =
+            r.body.onFinalizeCase{
+              case ExitCase.Completed => m.canBeReused.set(Reuse)
+              case ExitCase.Canceled => Sync[F].unit
+              case ExitCase.Error(_) => Sync[F].unit
+            }
+          )
+        )
+      }
   )
 }
 
