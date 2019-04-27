@@ -169,7 +169,10 @@ object EmberClient {
                 }
               )
         
-          ))(resp => resp.body.compile.drain.attempt.void)
+          ))(resp => managed.canBeReused.get.flatMap{
+            case Reuse => resp.body.compile.drain.attempt.void
+            case DontReuse => Sync[F].unit
+          })
         } yield response
       )
   }
