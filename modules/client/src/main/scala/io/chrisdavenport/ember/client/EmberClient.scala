@@ -29,11 +29,11 @@ object EmberClient {
     def sslContext[F[_]: Sync]: F[SSLContext] = Sync[F].delay(SSLContext.getDefault)
     val chunkSize: Int = 32 * 1024
     val maxResponseHeaderSize: Int = 4096
-    val timeout: Duration = 5.seconds
+    val timeout: Duration = 60.seconds
 
     // Pool Settings
-    val maxPerKey = 256
-    val maxTotal = 256
+    val maxPerKey = 100
+    val maxTotal = 100
     val idleTimeInPool: Long = 30000000000L // 30 Seconds in Nanos
   }
 
@@ -120,7 +120,12 @@ object EmberClient {
         sslContext,
         acg
         ).allocated <* logger.trace(s"Created Connection - RequestKey: ${requestKey}")},
-        {case (r, (_, shutdown)) =>  logger.trace(s"Shutting Down Connection - RequestKey: ${r}") >> shutdown},
+        {case (r, (ClientHelpers.RequestKeySocket(socket, _), shutdown)) =>  
+          logger.trace(s"Shutting Down Connection - RequestKey: ${r}") >> 
+          socket.endOfInput.attempt.void >>
+          socket.endOfOutput.attempt.void >>
+          socket.close.attempt.void >>
+          shutdown},
         DontReuse,
         idleTimeInPool,
         maxPerKey,
@@ -137,34 +142,35 @@ object EmberClient {
     , timeout: Duration
   ): Client[F] = {
       Client[F](request =>
-        pool.take(RequestKey.fromRequest(request))
-          .evalMap{ m =>
-            pool.state.flatMap{poolState =>
+        for {
+          managed <- pool.take(RequestKey.fromRequest(request))
+          _ <- Resource.liftF(pool.state.flatMap{poolState =>
               logger.trace(
-                s"Connection Taken - Key: ${m.resource._1.requestKey} - Reused: ${m.isReused} - PoolState: $poolState"
+                s"Connection Taken - Key: ${managed.resource._1.requestKey} - Reused: ${managed.isReused} - PoolState: $poolState"
               )
-            } >>
-            ClientHelpers.request[F](
+          })
+          response <- Resource.make(ClientHelpers.request[F](
               request,
-              m.resource._1,
+              managed.resource._1,
               chunkSize,
               maxResponseHeaderSize,
               timeout
-            ).map(response =>
-              response.copy(body =
+          ).map(response => 
+          response.copy(body =
                 response.body.onFinalizeCase{
                   case ExitCase.Completed =>
-                    val requestClose = request.isChunked || request.headers.get(Connection).exists(_.hasClose)
+                    val requestClose = request.headers.get(Connection).exists(_.hasClose)
                     val responseClose = response.isChunked || response.headers.get(Connection).exists(_.hasClose)
 
                     if (requestClose || responseClose) Sync[F].unit
-                    else m.canBeReused.set(Reuse)
+                    else managed.canBeReused.set(Reuse)
                   case ExitCase.Canceled => Sync[F].unit
                   case ExitCase.Error(_) => Sync[F].unit
                 }
               )
-            )
-          }
+        
+          ))(resp => resp.body.compile.drain.attempt.void)
+        } yield response
       )
   }
 }

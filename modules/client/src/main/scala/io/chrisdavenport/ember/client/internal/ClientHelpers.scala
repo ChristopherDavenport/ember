@@ -57,7 +57,6 @@ object ClientHelpers {
       initSocket <- io.tcp.Socket.client[F](address)
       socket <- Resource.liftF{
         if (requestKey.scheme === Uri.Scheme.https)
-          // Sync[F].delay(println("Elevating Socket to ssl")) *>
           liftToSecure[F](
             sslExecutionContext, sslContext
           )(
@@ -69,16 +68,15 @@ object ClientHelpers {
         else Applicative[F].pure(initSocket)
       }
     } yield RequestKeySocket(socket, requestKey)
-
   }
 
 
   def request[F[_]: ConcurrentEffect: ContextShift](
     request: Request[F]
     , requestKeySocket: RequestKeySocket[F]
-    , chunkSize: Int = 32*1024
-    , maxResponseHeaderSize: Int = 4096
-    , timeout: Duration = 5.seconds
+    , chunkSize: Int
+    , maxResponseHeaderSize: Int
+    , timeout: Duration
   )(implicit T: Timer[F]): F[Response[F]] = {
 
     def onNoTimeout(socket: Socket[F]): F[Response[F]] = 
@@ -93,13 +91,12 @@ object ClientHelpers {
 
     def onTimeout(socket: Socket[F], fin: FiniteDuration): F[Response[F]] = for {
       start <- T.clock.realTime(MILLISECONDS)
-      // _ <- Sync[F].delay(println(s"Attempting to write Request $request"))
+
       _ <- (
         Encoder.reqToBytes(request)
         .through(socket.writes(Some(fin)))
         .compile
-        .drain //>>
-        // Sync[F].delay(println("Finished Writing Request"))
+        .drain
       ).start
       timeoutSignal <- SignallingRef[F, Boolean](true)
       sent <- T.clock.realTime(MILLISECONDS)
