@@ -34,6 +34,7 @@ object EmberClient {
     // Pool Settings
     val maxPerKey = 256
     val maxTotal = 256
+    val idleTimeInPool: Long = 30000000000L // 30 Seconds in Nanos
   }
 
   // Simple
@@ -91,6 +92,7 @@ object EmberClient {
         sslContext,
         Defaults.maxTotal,
         Defaults.maxPerKey,
+        Defaults.idleTimeInPool,
         logger_
       )
     } yield fromConnectionPool(
@@ -108,6 +110,7 @@ object EmberClient {
     , sslContext : SSLContext
     , maxTotal: Int
     , maxPerKey: Int
+    , idleTimeInPool: Long
     , logger: Logger[F]
   ): Resource[F, KeyPool[F, RequestKey, (ClientHelpers.RequestKeySocket[F], F[Unit])]] = {
     KeyPool.create[F, RequestKey, (ClientHelpers.RequestKeySocket[F], F[Unit])](
@@ -119,7 +122,7 @@ object EmberClient {
         ).allocated <* logger.trace(s"Created Connection - RequestKey: ${requestKey}")},
         {case (r, (_, shutdown)) =>  logger.trace(s"Shutting Down Connection - RequestKey: ${r}") >> shutdown},
         DontReuse,
-        30000000000L,
+        idleTimeInPool,
         maxPerKey,
         maxTotal,
         {_ : Throwable => Applicative[F].unit}
