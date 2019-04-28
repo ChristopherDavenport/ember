@@ -30,7 +30,7 @@ lazy val client = project.in(file("modules/client"))
     libraryDependencies ++= Seq(
       "org.http4s"                  %% "http4s-client"              % http4sV,
       "io.chrisdavenport"           %% "log4cats-slf4j"             % log4catsV,
-      "io.chrisdavenport"           %% "keypool"                    % "0.0.2",
+      "io.chrisdavenport"           %% "keypool"                    % "0.0.3",
       "com.spinoco"                 %% "fs2-crypto"                 % "0.4.0"
     )
   )
@@ -77,7 +77,7 @@ lazy val commonSettings = Seq(
   crossScalaVersions := Seq(scalaVersion.value, "2.11.12"),
   scalacOptions += "-Yrangepos",
 
-  addCompilerPlugin("com.olegpy"    %% "better-monadic-for" % "0.3.0-M4"),
+  addCompilerPlugin("com.olegpy"    %% "better-monadic-for" % "0.3.0"),
   addCompilerPlugin("org.typelevel" %  "kind-projector" % "0.10.0" cross CrossVersion.binary),
 
   libraryDependencies ++= Seq(
