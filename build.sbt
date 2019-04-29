@@ -30,7 +30,7 @@ lazy val client = project.in(file("modules/client"))
     libraryDependencies ++= Seq(
       "org.http4s"                  %% "http4s-client"              % http4sV,
       "io.chrisdavenport"           %% "log4cats-slf4j"             % log4catsV,
-      "io.chrisdavenport"           %% "keypool"                    % "0.0.3",
+      "io.chrisdavenport"           %% "keypool"                    % "0.1.0",
       "com.spinoco"                 %% "fs2-crypto"                 % "0.4.0"
     )
   )
