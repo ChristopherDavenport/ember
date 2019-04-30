@@ -19,5 +19,4 @@ object EmberException {
   final case class ChunkedEncodingError(message: String) extends EmberException {
     override def getMessage: String = message
   }
-  
 }

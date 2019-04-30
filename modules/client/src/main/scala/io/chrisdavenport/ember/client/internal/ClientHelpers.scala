@@ -5,7 +5,7 @@ import fs2.concurrent._
 import fs2.io.tcp._
 import cats._
 import cats.effect._
-import cats.effect.concurrent.Semaphore
+// import cats.effect.concurrent.Semaphore
 import cats.effect.implicits._
 import cats.implicits._
 import scala.concurrent.ExecutionContext
@@ -25,10 +25,9 @@ object ClientHelpers {
 
   // lock is a semaphore for this socket. You should use a permit
   // to do anything with this.
-  case class RequestKeySocket[F[_]](
+  final case class RequestKeySocket[F[_]](
     socket: Socket[F],
-    requestKey: RequestKey,
-    lock: Semaphore[F]
+    requestKey: RequestKey
   )
 
   def requestToSocketWithKey[F[_]: ConcurrentEffect: Timer: ContextShift](
@@ -36,15 +35,28 @@ object ClientHelpers {
     sslExecutionContext : ExecutionContext,
     sslContext: SSLContext,
     acg: AsynchronousChannelGroup
-  ) = {
-    implicit val ACG: AsynchronousChannelGroup = acg
+  ): Resource[F, RequestKeySocket[F]] = {
     val requestKey = RequestKey.fromRequest(request)
+    requestKeyToSocketWithKey[F](
+      requestKey,
+      sslExecutionContext,
+      sslContext,
+      acg
+    )
+  }
+
+  def requestKeyToSocketWithKey[F[_]: ConcurrentEffect: Timer: ContextShift](
+    requestKey: RequestKey,
+    sslExecutionContext : ExecutionContext,
+    sslContext: SSLContext,
+    acg: AsynchronousChannelGroup
+  ): Resource[F, RequestKeySocket[F]] = {
+    implicit val ACG: AsynchronousChannelGroup = acg
     for {
       address <- Resource.liftF(getAddress(requestKey))
       initSocket <- io.tcp.Socket.client[F](address)
       socket <- Resource.liftF{
-        if (request.uri.scheme.exists(_ === Uri.Scheme.https)) 
-          // Sync[F].delay(println("Elevating Socket to ssl")) *>
+        if (requestKey.scheme === Uri.Scheme.https)
           liftToSecure[F](
             sslExecutionContext, sslContext
           )(
@@ -55,37 +67,36 @@ object ClientHelpers {
           )
         else Applicative[F].pure(initSocket)
       }
-      lock <- Resource.liftF(Semaphore(1))
-    } yield RequestKeySocket(socket, RequestKey.fromRequest(request), lock)
+    } yield RequestKeySocket(socket, requestKey)
   }
 
 
   def request[F[_]: ConcurrentEffect: ContextShift](
     request: Request[F]
     , requestKeySocket: RequestKeySocket[F]
-    , chunkSize: Int = 32*1024
-    , maxResponseHeaderSize: Int = 4096
-    , timeout: Duration = 5.seconds
+    , chunkSize: Int
+    , maxResponseHeaderSize: Int
+    , timeout: Duration
   )(implicit T: Timer[F]): F[Response[F]] = {
 
     def onNoTimeout(socket: Socket[F]): F[Response[F]] = 
       Parser.Response.parser(maxResponseHeaderSize)(
-        Encoder.reqToBytes(request)
-        .through(socket.writes(None))
-        .last
-        .onFinalize(socket.endOfOutput)
-        .flatMap { _ => socket.reads(chunkSize, None)}
+        socket.reads(chunkSize, None)
+          .concurrently(
+            Encoder.reqToBytes(request)
+              .through(socket.writes(None))
+              .drain
+          )
       )
 
     def onTimeout(socket: Socket[F], fin: FiniteDuration): F[Response[F]] = for {
       start <- T.clock.realTime(MILLISECONDS)
-      // _ <- Sync[F].delay(println(s"Attempting to write Request $request"))
+
       _ <- (
         Encoder.reqToBytes(request)
         .through(socket.writes(Some(fin)))
         .compile
-        .drain //>>
-        // Sync[F].delay(println("Finished Writing Request"))
+        .drain
       ).start
       timeoutSignal <- SignallingRef[F, Boolean](true)
       sent <- T.clock.realTime(MILLISECONDS)
@@ -96,12 +107,10 @@ object ClientHelpers {
       _ <- timeoutSignal.set(false).void
     } yield resp
 
-    requestKeySocket.lock.withPermit(
-      timeout match {
-        case t: FiniteDuration => onTimeout(requestKeySocket.socket, t)
-        case _ => onNoTimeout(requestKeySocket.socket)
-      }
-    )
+    timeout match {
+      case t: FiniteDuration => onTimeout(requestKeySocket.socket, t)
+      case _ => onNoTimeout(requestKeySocket.socket)
+    }
   }
 
 

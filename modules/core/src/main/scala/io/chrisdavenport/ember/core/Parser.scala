@@ -63,7 +63,6 @@ object Parser {
         val headerO = generateHeaderForLine(bv)
         headerO.map(Headers.of(_)).foldMap(identity) ++ acc
     }
-    
 
   }
 

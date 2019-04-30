@@ -96,10 +96,10 @@ object ServerHelpers {
                   case Right(()) => Sync[F].pure(())
                 }
             }
-            app.attempt.flatMap{
+            Stream.repeatEval(app.attempt.flatMap{
               case Right((request, response)) => send(Some(request), response)
               case Left(err) => send(None, onError(err))
-            }
+            }).compile.drain
           }
         )
       ).parJoin(maxConcurrency)
