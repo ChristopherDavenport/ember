@@ -52,7 +52,7 @@ lazy val examples = project.in(file("modules/examples"))
     )
   )
 
-val catsV = "1.6.0"
+val catsV = "1.6.1"
 val catsEffectV = "1.3.1"
 val fs2V = "1.0.4"
 val http4sV = "0.20.1"
