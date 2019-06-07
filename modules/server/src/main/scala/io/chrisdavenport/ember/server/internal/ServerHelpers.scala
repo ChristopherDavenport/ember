@@ -14,7 +14,7 @@ import _root_.io.chrisdavenport.ember.core.{Encoder, Parser}
 import _root_.io.chrisdavenport.ember.core.Util.readWithTimeout
 
 object ServerHelpers {
-    def server[F[_]: ConcurrentEffect : ContextShift](
+    def server[F[_]: Concurrent : ContextShift](
     bindAddress: InetSocketAddress,
     httpApp: HttpApp[F],
     ag: AsynchronousChannelGroup,
@@ -96,10 +96,10 @@ object ServerHelpers {
                   case Right(()) => Sync[F].pure(())
                 }
             }
-            Stream.repeatEval(app.attempt.flatMap{
+            app.attempt.flatMap{
               case Right((request, response)) => send(Some(request), response)
               case Left(err) => send(None, onError(err))
-            }).compile.drain
+            }
           }
         )
       ).parJoin(maxConcurrency)
