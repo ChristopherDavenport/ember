@@ -30,7 +30,7 @@ object ClientHelpers {
     requestKey: RequestKey
   )
 
-  def requestToSocketWithKey[F[_]: ConcurrentEffect: Timer: ContextShift](
+  def requestToSocketWithKey[F[_]: Concurrent: Timer: ContextShift](
     request: Request[F],
     sslExecutionContext : ExecutionContext,
     sslContext: SSLContext,
@@ -45,7 +45,7 @@ object ClientHelpers {
     )
   }
 
-  def requestKeyToSocketWithKey[F[_]: ConcurrentEffect: Timer: ContextShift](
+  def requestKeyToSocketWithKey[F[_]: Concurrent: Timer: ContextShift](
     requestKey: RequestKey,
     sslExecutionContext : ExecutionContext,
     sslContext: SSLContext,
@@ -71,7 +71,7 @@ object ClientHelpers {
   }
 
 
-  def request[F[_]: ConcurrentEffect: ContextShift](
+  def request[F[_]: Concurrent: ContextShift](
     request: Request[F]
     , requestKeySocket: RequestKeySocket[F]
     , chunkSize: Int
@@ -79,7 +79,7 @@ object ClientHelpers {
     , timeout: Duration
   )(implicit T: Timer[F]): F[Response[F]] = {
 
-    def onNoTimeout(socket: Socket[F]): F[Response[F]] = 
+    def onNoTimeout(socket: Socket[F]): F[Response[F]] =
       Parser.Response.parser(maxResponseHeaderSize)(
         socket.reads(chunkSize, None)
           .concurrently(
@@ -120,20 +120,20 @@ object ClientHelpers {
     sslES: ExecutionContext, sslContext: SSLContext
   )(socket: Socket[F], clientMode: Boolean)(host: String, port: Int): F[Socket[F]] = {
     for {
-      sslEngine <- Sync[F].delay(sslContext.createSSLEngine(host, port))
-      _ <- Sync[F].delay(sslEngine.setUseClientMode(clientMode))
+      sslEngine <- Concurrent[F].delay(sslContext.createSSLEngine(host, port))
+      _ <- Concurrent[F].delay(sslEngine.setUseClientMode(clientMode))
       secureSocket <- TLSSocket.instance[F](socket, sslEngine, sslES)
       _ <- secureSocket.startHandshake
     } yield secureSocket
   }.widen
 
   // https://github.com/http4s/http4s/blob/master/blaze-client/src/main/scala/org/http4s/client/blaze/Http1Support.scala#L86
-  private def getAddress[F[_]: Sync](requestKey: RequestKey): F[InetSocketAddress] =
+  private def getAddress[F[_]: Concurrent](requestKey: RequestKey): F[InetSocketAddress] =
     requestKey match {
       case RequestKey(s, auth) =>
         val port = auth.port.getOrElse { if (s == Uri.Scheme.https) 443 else 80 }
         val host = auth.host.value
-        Sync[F].delay(new InetSocketAddress(host, port))
+        Concurrent[F].delay(new InetSocketAddress(host, port))
     }
 
 }

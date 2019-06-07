@@ -39,7 +39,7 @@ object EmberClient {
 
   // Simple
 
-  def defaultSimpleClient[F[_]: ConcurrentEffect: Timer: ContextShift]: Resource[F, Client[F]] = {
+  def defaultSimpleClient[F[_]: Concurrent: Timer: ContextShift]: Resource[F, Client[F]] = {
     for {
       sslContext <- Resource.liftF(Defaults.sslContext[F])
       acg <- Defaults.asynchronousChannelGroup[F]
@@ -53,7 +53,7 @@ object EmberClient {
     )
   }
 
-  def simpleClient[F[_]: ConcurrentEffect: Timer: ContextShift](
+  def simpleClient[F[_]: Concurrent: Timer: ContextShift](
       sslExecutionContext: ExecutionContext
     , acg: AsynchronousChannelGroup
     , sslContext : SSLContext
@@ -120,8 +120,8 @@ object EmberClient {
         sslContext,
         acg
         ).allocated <* logger.trace(s"Created Connection - RequestKey: ${requestKey}")},
-        {case (r, (ClientHelpers.RequestKeySocket(socket, _), shutdown)) =>  
-          logger.trace(s"Shutting Down Connection - RequestKey: ${r}") >> 
+        {case (r, (ClientHelpers.RequestKeySocket(socket, _), shutdown)) =>
+          logger.trace(s"Shutting Down Connection - RequestKey: ${r}") >>
           socket.endOfInput.attempt.void >>
           socket.endOfOutput.attempt.void >>
           socket.close.attempt.void >>
@@ -155,7 +155,7 @@ object EmberClient {
               chunkSize,
               maxResponseHeaderSize,
               timeout
-          ).map(response => 
+          ).map(response =>
           response.copy(body =
                 response.body.onFinalizeCase{
                   case ExitCase.Completed =>
@@ -168,7 +168,7 @@ object EmberClient {
                   case ExitCase.Error(_) => Sync[F].unit
                 }
               )
-        
+
           ))(resp => managed.canBeReused.get.flatMap{
             case Reuse => resp.body.compile.drain.attempt.void
             case DontReuse => Sync[F].unit
