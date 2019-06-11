@@ -7,7 +7,7 @@ import Shared._
 
 import scala.util.control.NonFatal
 
-object ChunkedEncoding {
+private[ember] object ChunkedEncoding {
 
   /** From fs2-http
     * decodes from the HTTP chunked encoding. After last chunk this terminates. Allows to specify max header size, after which this terminates

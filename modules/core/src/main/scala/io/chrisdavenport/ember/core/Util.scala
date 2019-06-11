@@ -1,5 +1,6 @@
 package io.chrisdavenport.ember.core
 
+import cats._
 import cats.effect._
 import cats.implicits._
 import fs2._
@@ -7,8 +8,7 @@ import fs2.io.tcp.Socket
 import scala.concurrent.duration._
 import scala.concurrent.duration.MILLISECONDS
 
-package object Util {
-    import cats.ApplicativeError
+private[ember] object Util {
     /**
    * The issue with a normal http body is that there is no termination character,
    * thus unless you have content-length and the client still has their input side open,

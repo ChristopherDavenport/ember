@@ -21,7 +21,7 @@ import spinoco.fs2.crypto.io.tcp.TLSSocket
 import scala.concurrent.ExecutionContext
 
 
-object ClientHelpers {
+private[client] object ClientHelpers {
 
   // lock is a semaphore for this socket. You should use a permit
   // to do anything with this.

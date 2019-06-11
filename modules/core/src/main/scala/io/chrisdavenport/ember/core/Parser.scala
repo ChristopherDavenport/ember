@@ -9,7 +9,7 @@ import cats.effect._
 import Shared._
 import scala.annotation.tailrec
 
-object Parser {
+private[ember] object Parser {
     /**
     * From the stream of bytes this extracts Http Header and body part.
     */
