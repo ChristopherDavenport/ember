@@ -21,7 +21,7 @@ private[server] object ServerHelpers {
     ag: AsynchronousChannelGroup,
     // Defaults
     onError: Throwable => Response[F] = {_: Throwable => Response[F](Status.InternalServerError)},
-    onWriteFailure : Option[(Option[Request[F]], Response[F], Throwable) => F[Unit]] = None,
+    onWriteFailure : (Option[Request[F]], Response[F], Throwable) => F[Unit] ,
     terminationSignal: Option[SignallingRef[F, Boolean]] = None,
     maxConcurrency: Int = Int.MaxValue,
     receiveBufferSize: Int = 256 * 1024,
@@ -33,25 +33,6 @@ private[server] object ServerHelpers {
     // Termination Signal, if not present then does not terminate.
     val termSignal: F[SignallingRef[F, Boolean]] = 
       terminationSignal.fold(SignallingRef[F, Boolean](false))(_.pure[F])
-
-    val writeFailure: (Option[Request[F]], Response[F], Throwable) => F[Unit] = {
-      // Jesus Scalac
-      def doNothing(f: Option[Request[F]], r: Response[F], t: Throwable) : F[Unit] = {
-        val _ = {
-          val _ = {
-            val _ = t
-            r
-          }
-          f
-        }
-        Sync[F].unit
-      }
-        
-      onWriteFailure match {
-        case Some(f) => f
-        case None => doNothing
-      }
-    }
     
     def socketReadRequest(
       socket: Socket[F], 
@@ -93,7 +74,7 @@ private[server] object ServerHelpers {
                 .drain
                 .attempt
                 .flatMap{
-                  case Left(err) => writeFailure(request, resp, err)
+                  case Left(err) => onWriteFailure(request, resp, err)
                   case Right(()) => Sync[F].pure(())
                 }
             }

@@ -9,7 +9,7 @@ import org.http4s.dsl.Http4sDsl
 import org.http4s.circe._
 import _root_.io.circe._
 
-import _root_.io.chrisdavenport.ember.server.EmberServer
+import _root_.io.chrisdavenport.ember.server.EmberServerBuilder
 
 object ServerExample extends IOApp{
 
@@ -17,11 +17,13 @@ object ServerExample extends IOApp{
     val host = "0.0.0.0"
     val port = 8080
     for {
-      server <- Stream.resource(EmberServer.impl[IO](
-        host,
-        port,
-        service[IO]
-      ))
+      server <- Stream.resource(
+        EmberServerBuilder.default[IO]
+          .withHost(host)
+          .withPort(port)
+          .withHttpApp(service[IO])
+          .build
+      )
       _ <- Stream.eval(IO.delay(println(s"Server Has Started at ${server.address}")))
       _ <- Stream.never[IO] >> Stream.emit(())
     } yield ()
