@@ -1,11 +1,11 @@
-package io.chrisdavenport.ember.client.internal
+package io.chrisdavenport.ember.client
+package internal
 
 import fs2._
 import fs2.concurrent._
 import fs2.io.tcp._
 import cats._
 import cats.effect._
-// import cats.effect.concurrent.Semaphore
 import cats.effect.implicits._
 import cats.implicits._
 import scala.concurrent.ExecutionContext
@@ -23,23 +23,14 @@ import scala.concurrent.ExecutionContext
 
 private[client] object ClientHelpers {
 
-  // lock is a semaphore for this socket. You should use a permit
-  // to do anything with this.
-  final case class RequestKeySocket[F[_]](
-    socket: Socket[F],
-    requestKey: RequestKey
-  )
-
   def requestToSocketWithKey[F[_]: Concurrent: Timer: ContextShift](
     request: Request[F],
-    sslExecutionContext : ExecutionContext,
-    sslContext: SSLContext,
+    sslContext: Option[(ExecutionContext, SSLContext)],
     acg: AsynchronousChannelGroup
   ): Resource[F, RequestKeySocket[F]] = {
     val requestKey = RequestKey.fromRequest(request)
     requestKeyToSocketWithKey[F](
       requestKey,
-      sslExecutionContext,
       sslContext,
       acg
     )
@@ -47,8 +38,7 @@ private[client] object ClientHelpers {
 
   def requestKeyToSocketWithKey[F[_]: Concurrent: Timer: ContextShift](
     requestKey: RequestKey,
-    sslExecutionContext : ExecutionContext,
-    sslContext: SSLContext,
+    sslContext: Option[(ExecutionContext, SSLContext)],
     acg: AsynchronousChannelGroup
   ): Resource[F, RequestKeySocket[F]] = {
     implicit val ACG: AsynchronousChannelGroup = acg
@@ -57,6 +47,9 @@ private[client] object ClientHelpers {
       initSocket <- io.tcp.Socket.client[F](address)
       socket <- Resource.liftF{
         if (requestKey.scheme === Uri.Scheme.https)
+          sslContext.fold[F[Socket[F]]](
+            ApplicativeError[F, Throwable].raiseError(new Throwable("EmberClient Not Configured for Https"))
+          ){case (sslExecutionContext, sslContext) => 
           liftToSecure[F](
             sslExecutionContext, sslContext
           )(
@@ -65,6 +58,7 @@ private[client] object ClientHelpers {
             requestKey.authority.host.value,
             requestKey.authority.port.getOrElse(443)
           )
+          }
         else Applicative[F].pure(initSocket)
       }
     } yield RequestKeySocket(socket, requestKey)

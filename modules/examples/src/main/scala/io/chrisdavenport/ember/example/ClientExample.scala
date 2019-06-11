@@ -6,7 +6,7 @@ import org.http4s._
 import org.http4s.circe._
 
 import _root_.io.circe.Json
-import _root_.io.chrisdavenport.ember.client.EmberClient
+import _root_.io.chrisdavenport.ember.client.EmberClientBuilder
 // import cats.effect.concurrent._
 import fs2._
 import _root_.io.chrisdavenport.log4cats.slf4j.Slf4jLogger
@@ -23,7 +23,8 @@ object ClientExample extends IOApp{
 
     // streamApp.compile.drain
 
-    EmberClient.defaultPooledClient[IO]
+    EmberClientBuilder.default[IO]
+      .build
       .use( client =>
         Stream(  
         // Not Https
