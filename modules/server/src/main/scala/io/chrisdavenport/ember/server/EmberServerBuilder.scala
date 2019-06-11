@@ -13,16 +13,16 @@ import java.nio.channels.AsynchronousChannelGroup
 
 
 final class EmberServerBuilder[F[_]: Concurrent: Timer: ContextShift] private (
-  private val host: String,
-  private val port: Int,
+  val host: String,
+  val port: Int,
   private val httpApp: HttpApp[F],
   private val agR: Resource[F, AsynchronousChannelGroup],
   private val onError: Throwable => Response[F],
-  private val onWriteFailure : Option[(Option[Request[F]], Response[F], Throwable) => F[Unit]],
-  private val maxConcurrency: Int,
-  private val receiveBufferSize: Int,
-  private val maxHeaderSize: Int,
-  private val requestHeaderReceiveTimeout: Duration
+  private val onWriteFailure : (Option[Request[F]], Response[F], Throwable) => F[Unit],
+  val maxConcurrency: Int,
+  val receiveBufferSize: Int,
+  val maxHeaderSize: Int,
+  val requestHeaderReceiveTimeout: Duration
 ){ self => 
 
   private def copy(
@@ -31,7 +31,7 @@ final class EmberServerBuilder[F[_]: Concurrent: Timer: ContextShift] private (
     httpApp: HttpApp[F] = self.httpApp,
     agR: Resource[F, AsynchronousChannelGroup] = self.agR,
     onError: Throwable => Response[F] = self.onError,
-    onWriteFailure : Option[(Option[Request[F]], Response[F], Throwable) => F[Unit]] = self.onWriteFailure,
+    onWriteFailure : (Option[Request[F]], Response[F], Throwable) => F[Unit] = self.onWriteFailure,
     maxConcurrency: Int = self.maxConcurrency,
     receiveBufferSize: Int = self.receiveBufferSize,
     maxHeaderSize: Int = self.maxHeaderSize,
@@ -55,7 +55,7 @@ final class EmberServerBuilder[F[_]: Concurrent: Timer: ContextShift] private (
   def withAsynchronousChannelGroup(acg: AsynchronousChannelGroup) =
     copy(agR = acg.pure[Resource[F, ?]])
   def withOnError(onError: Throwable => Response[F]) = copy(onError = onError)
-  def withOnWriteFailure(onWriteFailure: Option[(Option[Request[F]], Response[F], Throwable) => F[Unit]]) =
+  def withOnWriteFailure(onWriteFailure: (Option[Request[F]], Response[F], Throwable) => F[Unit]) =
     copy(onWriteFailure = onWriteFailure)
   def withMaxConcurrency(maxConcurrency: Int) = copy(maxConcurrency = maxConcurrency)
   def withReceiveBufferSize(receiveBufferSize: Int)  = copy(receiveBufferSize = receiveBufferSize)
@@ -119,7 +119,8 @@ object EmberServerBuilder {
           )
         )(acg => Sync[F].delay(acg.shutdown))
     def onError[F[_]]: Throwable => Response[F] = {_: Throwable => Response[F](Status.InternalServerError)}
-    def onWriteFailure[F[_]] : Option[(Option[Request[F]], Response[F], Throwable) => F[Unit]] = None
+    def onWriteFailure[F[_]: Applicative] : (Option[Request[F]], Response[F], Throwable) => F[Unit] = 
+      { case _: (Option[Request[F]], Response[F], Throwable) => Applicative[F].unit }
     val maxConcurrency: Int = Int.MaxValue
     val receiveBufferSize: Int = 256 * 1024
     val maxHeaderSize: Int = 10 * 1024
