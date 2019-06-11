@@ -13,8 +13,9 @@ import org.http4s._
 import _root_.io.chrisdavenport.ember.core.{Encoder, Parser}
 import _root_.io.chrisdavenport.ember.core.Util.readWithTimeout
 
-object ServerHelpers {
-    def server[F[_]: Concurrent : ContextShift](
+private[server] object ServerHelpers {
+  
+  def server[F[_]: Concurrent : ContextShift](
     bindAddress: InetSocketAddress,
     httpApp: HttpApp[F],
     ag: AsynchronousChannelGroup,
