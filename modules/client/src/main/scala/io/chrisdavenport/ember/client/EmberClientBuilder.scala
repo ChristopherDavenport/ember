@@ -18,7 +18,6 @@ import org.http4s.client._
 
 
 final class EmberClientBuilder[F[_]: Concurrent: Timer: ContextShift] private (
-    // private val sslExecutionContext: ExecutionContext
   private val sslContextOpt : Option[(ExecutionContext, SSLContext)]
   , private val acgR: Resource[F, AsynchronousChannelGroup]
   , val maxTotal: Int
