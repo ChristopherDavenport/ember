@@ -51,7 +51,7 @@ final class EmberClient[F[_]: Bracket[?[_], Throwable]] private[client] (
     req.flatMap(fetch(_)(f))
 
   /**
-    * Returns this client as a [[Kleisli]].  All connections created by this
+    * Returns this client as a Kleisli.  All connections created by this
     * service are disposed on completion of callback task f.
     *
     * This method effectively reverses the arguments to `fetch`, and is
@@ -66,12 +66,12 @@ final class EmberClient[F[_]: Bracket[?[_], Throwable]] private[client] (
     toKleisli(f)
 
   /**
-    * Returns this client as an [[HttpApp]].  It is the responsibility of
+    * Returns this client as an HttpApp.  It is the responsibility of
     * callers of this service to run the response body to dispose of the
     * underlying HTTP connection.
     *
     * This is intended for use in proxy servers.  `fetch`, `fetchAs`,
-    * [[toKleisli]], and [[streaming]] are safer alternatives, as their
+    * toKleisli, and streaming are safer alternatives, as their
     * signatures guarantee disposal of the HTTP connection.
     */
   def toHttpApp: HttpApp[F] = Kleisli { req =>
@@ -82,12 +82,12 @@ final class EmberClient[F[_]: Bracket[?[_], Throwable]] private[client] (
   }
 
   /**
-    * Returns this client as an [[HttpService]].  It is the
+    * Returns this client as an HttpService.  It is the
     * responsibility of callers of this service to run the response
     * body to dispose of the underlying HTTP connection.
     *
     * This is intended for use in proxy servers.  `fetch`, `fetchAs`,
-    * [[toKleisli]], and [[streaming]] are safer alternatives, as their
+    * toKleisli, and streaming are safer alternatives, as their
     * signatures guarantee disposal of the HTTP connection.
     */
   @deprecated("Use toHttpApp. Call `.mapF(OptionT.liftF)` if OptionT is really desired.", "0.19")

@@ -1,8 +1,9 @@
 sudo: false
 language: scala
+dist: xenial
 
 scala:
-  - 2.12.4
+  - 2.12.8
   - 2.11.12
 
 before_cache:
@@ -16,10 +17,11 @@ cache:
     - $HOME/.sbt
 
 jdk:
-  - oraclejdk8
+  - openjdk8
 
 script:
   - sbt ++$TRAVIS_SCALA_VERSION test
+  - sbt ++$TRAVIS_SCALA_VERSION doc
 
 after_success:
 - test $TRAVIS_PULL_REQUEST == "false" && test $TRAVIS_BRANCH == "master" && test $TRAVIS_REPO_SLUG == "ChristopherDavenport/ember" && sbt ++$TRAVIS_SCALA_VERSION publish
