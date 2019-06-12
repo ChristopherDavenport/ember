@@ -22,7 +22,7 @@ final class EmberClient[F[_]: Bracket[?[_], Throwable]] private[client] (
    * of the underlying Pool, without having access to the pool itself.
    * 
    * The first element represents total connections in the pool, the second
-   * is a mappying between the number of connections in the pool for each requestKey.
+   * is a mapping between the number of connections in the pool for each requestKey.
    */
   def state: F[(Int, Map[RequestKey, Int])] = pool.state
 
