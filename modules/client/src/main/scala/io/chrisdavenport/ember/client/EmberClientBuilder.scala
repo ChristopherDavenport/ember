@@ -30,7 +30,7 @@ final class EmberClientBuilder[F[_]: Concurrent: Timer: ContextShift] private (
   , val timeout: Duration
 ){ self =>
 
-  def copy(
+  private def copy(
     sslContextOpt: Option[(ExecutionContext, SSLContext)] = self.sslContextOpt
   , acgR: Resource[F, AsynchronousChannelGroup] = self.acgR
   , maxTotal: Int = self.maxTotal
