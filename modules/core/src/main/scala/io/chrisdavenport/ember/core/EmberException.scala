@@ -2,7 +2,7 @@ package io.chrisdavenport.ember.core
 
 import cats.implicits._
 
-sealed trait EmberException extends RuntimeException
+sealed trait EmberException extends RuntimeException with Product with Serializable
 
 object EmberException {
   final case class Timeout(started: Long, timedOut: Long) extends EmberException {
