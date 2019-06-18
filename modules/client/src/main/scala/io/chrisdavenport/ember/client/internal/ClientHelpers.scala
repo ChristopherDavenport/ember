@@ -1,7 +1,6 @@
-package io.chrisdavenport.ember.client
-package internal
+package io.chrisdavenport.ember.client.internal
 
-import fs2._
+import io.chrisdavenport.ember.client._
 import fs2.concurrent._
 import fs2.io.tcp._
 import cats._
@@ -11,7 +10,6 @@ import cats.implicits._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import java.net.InetSocketAddress
-import java.nio.channels.AsynchronousChannelGroup
 import javax.net.ssl.SSLContext
 import org.http4s._
 import org.http4s.client.RequestKey
@@ -19,6 +17,8 @@ import _root_.io.chrisdavenport.ember.core.{Encoder,Parser}
 import _root_.io.chrisdavenport.ember.core.Util.readWithTimeout
 import spinoco.fs2.crypto.io.tcp.TLSSocket
 import scala.concurrent.ExecutionContext
+import _root_.fs2.io.tcp.SocketGroup
+
 
 
 private[client] object ClientHelpers {
@@ -26,25 +26,24 @@ private[client] object ClientHelpers {
   def requestToSocketWithKey[F[_]: Concurrent: Timer: ContextShift](
     request: Request[F],
     sslContext: Option[(ExecutionContext, SSLContext)],
-    acg: AsynchronousChannelGroup
+    sg: SocketGroup
   ): Resource[F, RequestKeySocket[F]] = {
     val requestKey = RequestKey.fromRequest(request)
     requestKeyToSocketWithKey[F](
       requestKey,
       sslContext,
-      acg
+      sg
     )
   }
 
   def requestKeyToSocketWithKey[F[_]: Concurrent: Timer: ContextShift](
     requestKey: RequestKey,
     sslContext: Option[(ExecutionContext, SSLContext)],
-    acg: AsynchronousChannelGroup
+    sg: SocketGroup
   ): Resource[F, RequestKeySocket[F]] = {
-    implicit val ACG: AsynchronousChannelGroup = acg
     for {
       address <- Resource.liftF(getAddress(requestKey))
-      initSocket <- io.tcp.Socket.client[F](address)
+      initSocket <- sg.client[F](address)
       socket <- Resource.liftF{
         if (requestKey.scheme === Uri.Scheme.https)
           sslContext.fold[F[Socket[F]]](
