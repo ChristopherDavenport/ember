@@ -30,8 +30,8 @@ lazy val client = project.in(file("modules/client"))
     libraryDependencies ++= Seq(
       "org.http4s"                  %% "http4s-client"              % http4sV,
       "io.chrisdavenport"           %% "log4cats-slf4j"             % log4catsV,
-      "io.chrisdavenport"           %% "keypool"                    % "0.1.0",
-      "com.spinoco"                 %% "fs2-crypto"                 % "0.4.0"
+      "io.chrisdavenport"           %% "keypool"                    % keypoolV,
+      "com.spinoco"                 %% "fs2-crypto"                 % fs2CryptoV
     )
   )
 
@@ -52,16 +52,17 @@ lazy val examples = project.in(file("modules/examples"))
     )
   )
 
-val catsV = "1.6.1"
-val catsEffectV = "1.3.1"
-val fs2V = "1.0.5"
-val http4sV = "0.20.3"
-val circeV = "0.11.1"
-val log4catsV = "0.3.0"
+val catsV = "2.0.0-M4"
+val catsEffectV = "2.0.0-M4"
+val fs2V = "1.1.0-M1"
+val http4sV = "0.21.0-M1"
+val circeV = "0.12.0-M3"
+val log4catsV = "0.4.0-M1"
+val keypoolV = "0.2.0-M2"
+val fs2CryptoV = "0.5.0-M1"
+
 
 val specs2V = "4.6.0"
-val disciplineV = "0.11.1"
-val scShapelessV = "1.1.8"
 
 val logbackClassicV = "1.2.3"
 
@@ -74,8 +75,8 @@ lazy val commonSettings = Seq(
   organization := "io.chrisdavenport",
 
   scalaVersion := "2.12.8",
-  crossScalaVersions := Seq(scalaVersion.value, "2.11.12"),
-  scalacOptions += "-Yrangepos",
+  crossScalaVersions := Seq("2.13.0", scalaVersion.value, "2.11.12"),
+  scalacOptions --= removeFatalWarnings(scalaVersion.value),
 
   addCompilerPlugin("com.olegpy"    %% "better-monadic-for" % "0.3.0"),
   addCompilerPlugin("org.typelevel" %  "kind-projector" % "0.10.3" cross CrossVersion.binary),
@@ -89,10 +90,17 @@ lazy val commonSettings = Seq(
     "org.specs2"                  %% "specs2-core"                % specs2V       % Test,
     "org.specs2"                  %% "specs2-scalacheck"          % specs2V       % Test,
     "org.typelevel"               %% "cats-effect-laws"           % catsEffectV   % Test,
-    "org.typelevel"               %% "discipline"                 % disciplineV   % Test,
-    "com.github.alexarchambault"  %% "scalacheck-shapeless_1.13"  % scShapelessV  % Test
   )
-) ++ releaseSettings
+) ++ releaseSettings 
+
+def removeFatalWarnings(scalaVersion: String) = 
+  if (priorTo2_13(scalaVersion)) Seq() else Seq("-Xfatal-warnings")
+
+def priorTo2_13(scalaVersion: String): Boolean =
+  CrossVersion.partialVersion(scalaVersion) match {
+    case Some((2, minor)) if minor < 13 => true
+    case _                              => false
+}
 
 lazy val releaseSettings = {
   import ReleaseTransformations._

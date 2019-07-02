@@ -4,6 +4,7 @@ import cats._
 import cats.data.{NonEmptyList, Chain}
 import cats.effect.{Effect, IO}
 import cats.effect.laws.discipline.arbitrary._
+import cats.laws.discipline.arbitrary.catsLawsArbitraryForChain
 import cats.effect.laws.util.TestContext
 import cats.implicits.{catsSyntaxEither => _, _}
 import fs2.{Pure, Stream}
@@ -307,8 +308,8 @@ private[core] object Http4sArbitraries extends LockedTraits {
   implicit val http4sTestingArbitraryForUrlForm: Arbitrary[UrlForm] = Arbitrary {
     // new String("\ufffe".getBytes("UTF-16"), "UTF-16") != "\ufffe".
     // Ain't nobody got time for that.
-    arbitrary[Map[String, Seq[String]]]
-      .map(a => UrlForm(a.mapValues(Chain.fromSeq)))
+    Arbitrary.arbitrary[Map[String, Chain[String]]]
+      .map(UrlForm.apply)
       .suchThat(!_.toString.contains('\ufffe'))
   }
 

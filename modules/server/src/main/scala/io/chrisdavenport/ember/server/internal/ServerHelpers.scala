@@ -2,13 +2,11 @@ package io.chrisdavenport.ember.server.internal
 
 import fs2._
 import fs2.concurrent._
-import fs2.io.tcp
 import fs2.io.tcp._
 import cats.effect._
 import cats.implicits._
 import scala.concurrent.duration._
 import java.net.InetSocketAddress
-import java.nio.channels.AsynchronousChannelGroup
 import org.http4s._
 import _root_.io.chrisdavenport.ember.core.{Encoder, Parser}
 import _root_.io.chrisdavenport.ember.core.Util.readWithTimeout
@@ -18,7 +16,7 @@ private[server] object ServerHelpers {
   def server[F[_]: Concurrent : ContextShift](
     bindAddress: InetSocketAddress,
     httpApp: HttpApp[F],
-    ag: AsynchronousChannelGroup,
+    sg: SocketGroup,
     // Defaults
     onError: Throwable => Response[F] = {_: Throwable => Response[F](Status.InternalServerError)},
     onWriteFailure : (Option[Request[F]], Response[F], Throwable) => F[Unit] ,
@@ -28,7 +26,6 @@ private[server] object ServerHelpers {
     maxHeaderSize: Int = 10 * 1024,
     requestHeaderReceiveTimeout: Duration = 5.seconds
   )(implicit C: Clock[F]): Stream[F, Nothing] = {
-    implicit val AG = ag
 
     // Termination Signal, if not present then does not terminate.
     val termSignal: F[SignallingRef[F, Boolean]] = 
@@ -55,7 +52,7 @@ private[server] object ServerHelpers {
       }
 
     Stream.eval(termSignal).flatMap(terminationSignal => 
-    tcp.Socket.server[F](bindAddress)
+    sg.server[F](bindAddress)
       .map(connect => 
         Stream.eval(
           connect.use{socket =>

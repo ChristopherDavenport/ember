@@ -4,19 +4,18 @@ import cats._
 import cats.implicits._
 import cats.effect._
 import fs2.concurrent._
+import fs2.io.tcp.SocketGroup
 import org.http4s._
 import org.http4s.server.Server
 import scala.concurrent.duration._
 import java.net.InetSocketAddress
-import java.util.concurrent.Executors
-import java.nio.channels.AsynchronousChannelGroup
 
 
 final class EmberServerBuilder[F[_]: Concurrent: Timer: ContextShift] private (
   val host: String,
   val port: Int,
   private val httpApp: HttpApp[F],
-  private val agR: Resource[F, AsynchronousChannelGroup],
+  private val sgR: Resource[F, SocketGroup],
   private val onError: Throwable => Response[F],
   private val onWriteFailure : (Option[Request[F]], Response[F], Throwable) => F[Unit],
   val maxConcurrency: Int,
@@ -29,7 +28,7 @@ final class EmberServerBuilder[F[_]: Concurrent: Timer: ContextShift] private (
     host: String = self.host,
     port: Int = self.port,
     httpApp: HttpApp[F] = self.httpApp,
-    agR: Resource[F, AsynchronousChannelGroup] = self.agR,
+    sgR: Resource[F, SocketGroup] = self.sgR,
     onError: Throwable => Response[F] = self.onError,
     onWriteFailure : (Option[Request[F]], Response[F], Throwable) => F[Unit] = self.onWriteFailure,
     maxConcurrency: Int = self.maxConcurrency,
@@ -40,7 +39,7 @@ final class EmberServerBuilder[F[_]: Concurrent: Timer: ContextShift] private (
     host = host,
     port = port,
     httpApp = httpApp,
-    agR = agR,
+    sgR = sgR,
     onError = onError,
     onWriteFailure = onWriteFailure,
     maxConcurrency = maxConcurrency,
@@ -52,8 +51,8 @@ final class EmberServerBuilder[F[_]: Concurrent: Timer: ContextShift] private (
   def withHost(host: String) = copy(host = host)
   def withPort(port: Int) = copy(port = port)
   def withHttpApp(httpApp: HttpApp[F]) = copy(httpApp = httpApp)
-  def withAsynchronousChannelGroup(acg: AsynchronousChannelGroup) =
-    copy(agR = acg.pure[Resource[F, ?]])
+  def withSocketGroup(sg: SocketGroup) =
+    copy(sgR = sg.pure[Resource[F, ?]])
   def withOnError(onError: Throwable => Response[F]) = copy(onError = onError)
   def withOnWriteFailure(onWriteFailure: (Option[Request[F]], Response[F], Throwable) => F[Unit]) =
     copy(onWriteFailure = onWriteFailure)
@@ -65,14 +64,14 @@ final class EmberServerBuilder[F[_]: Concurrent: Timer: ContextShift] private (
 
   def build: Resource[F, Server[F]] = for {
     bindAddress <- Resource.liftF(Sync[F].delay(new InetSocketAddress(host, port)))
-    acg <- agR
+    sg <- sgR
     shutdownSignal <- Resource.liftF(SignallingRef[F, Boolean](false))
     out <- Resource.make(
         Concurrent[F].start(
-          internal.ServerHelpers.server(
+          io.chrisdavenport.ember.server.internal.ServerHelpers.server(
             bindAddress,
             httpApp,
-            acg,
+            sg,
             onError,
             onWriteFailure,
             shutdownSignal.some,
@@ -99,7 +98,7 @@ object EmberServerBuilder {
     host = Defaults.host,
     port = Defaults.port,
     httpApp = Defaults.httpApp[F],
-    agR = Defaults.agR[F],
+    sgR = Defaults.sgR[F],
     onError = Defaults.onError[F],
     onWriteFailure = Defaults.onWriteFailure[F],
     maxConcurrency = Defaults.maxConcurrency,
@@ -113,11 +112,8 @@ object EmberServerBuilder {
     val port: Int = 8000
 
     def httpApp[F[_]: Applicative]: HttpApp[F] = HttpApp.notFound[F]
-    def agR[F[_]: Sync]: Resource[F, AsynchronousChannelGroup] = Resource.make(
-          Sync[F].delay(
-            AsynchronousChannelGroup.withFixedThreadPool(100, Executors.defaultThreadFactory)
-          )
-        )(acg => Sync[F].delay(acg.shutdown))
+    def sgR[F[_]: Sync: ContextShift]: Resource[F, SocketGroup] = 
+      Blocker[F].flatMap(b => SocketGroup[F](b))
     def onError[F[_]]: Throwable => Response[F] = {_: Throwable => Response[F](Status.InternalServerError)}
     def onWriteFailure[F[_]: Applicative] : (Option[Request[F]], Response[F], Throwable) => F[Unit] = 
       { case _: (Option[Request[F]], Response[F], Throwable) => Applicative[F].unit }
