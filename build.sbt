@@ -59,7 +59,7 @@ val http4sV = "0.20.3"
 val circeV = "0.11.1"
 val log4catsV = "0.3.0"
 
-val specs2V = "4.5.1"
+val specs2V = "4.6.0"
 val disciplineV = "0.11.1"
 val scShapelessV = "1.1.8"
 
