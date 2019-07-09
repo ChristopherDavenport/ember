@@ -1,5 +1,7 @@
 # ember [![Build Status](https://travis-ci.org/ChristopherDavenport/ember.svg?branch=master)](https://travis-ci.org/ChristopherDavenport/ember)
 
+# Has Been Ported into Http4s as Ember Projects
+
 A functional fs2 backend for http.
 
 A lot of work within was used from fs2-http.
