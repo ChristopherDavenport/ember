@@ -78,7 +78,7 @@ lazy val commonSettings = Seq(
   crossScalaVersions := Seq("2.13.0", scalaVersion.value, "2.11.12"),
   scalacOptions --= removeFatalWarnings(scalaVersion.value),
 
-  addCompilerPlugin("com.olegpy"    %% "better-monadic-for" % "0.3.0"),
+  addCompilerPlugin("com.olegpy"    %% "better-monadic-for" % "0.3.1"),
   addCompilerPlugin("org.typelevel" %  "kind-projector" % "0.10.3" cross CrossVersion.binary),
 
   libraryDependencies ++= Seq(
