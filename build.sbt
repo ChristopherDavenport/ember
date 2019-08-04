@@ -62,7 +62,7 @@ val keypoolV = "0.2.0-M2"
 val fs2CryptoV = "0.5.0-M1"
 
 
-val specs2V = "4.6.0"
+val specs2V = "4.7.0"
 
 val logbackClassicV = "1.2.3"
 
